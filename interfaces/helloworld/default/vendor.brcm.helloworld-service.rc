@@ -1,0 +1,6 @@
+service vendor.brcm.helloworld-service /vendor/bin/hw/vendor.brcm.helloworld-service
+    class hal
+    interface aidl aidl.vendor.brcm.helloworld.IHelloWorld/default
+    user root
+    group root
+    seclabel u:r:hal_brcm_hwservice:s0

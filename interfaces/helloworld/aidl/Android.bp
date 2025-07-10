@@ -1,0 +1,16 @@
+aidl_interface {
+    name: "vendor.brcm.helloworld",
+    vendor: true,
+    unstable: true,
+    srcs: [
+        "vendor/brcm/helloworld/IHelloWorld.aidl",
+    ],
+    backend: {
+        cpp: {
+            enabled: true,
+        },
+        java: {
+            enabled: true,
+        },
+    },
+}

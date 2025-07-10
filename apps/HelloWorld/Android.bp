@@ -1,0 +1,32 @@
+cc_library_shared {
+    name: "libhelloworld_jni",
+    srcs: ["hello_world_jni.cpp"],
+    vendor: true,
+    shared_libs: [
+        "libbinder_ndk",
+        "liblog",
+        "libutils",
+        "vendor.brcm.helloworld-ndk",
+    ],
+    header_libs: ["jni_headers"],
+    cflags: ["-Wall", "-Werror"],
+}
+
+android_app {
+    name: "HelloWorld",
+    srcs: ["src/**/*.kt"],
+    sdk_version: "current",
+    vendor: true,
+    privileged: true,
+    kotlincflags: ["-Xjvm-default=all"],
+    static_libs: [
+        "androidx.activity_activity-compose",
+        "androidx.compose.ui_ui",
+        "androidx.compose.material3_material3",
+        "androidx.compose.ui_ui-tooling-preview",
+        "androidx.lifecycle_lifecycle-runtime-ktx",
+        "androidx.compose.runtime_runtime",
+    ],
+    jni_libs: ["libhelloworld_jni"],
+    manifest: "AndroidManifest.xml",
+}

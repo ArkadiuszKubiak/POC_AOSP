@@ -1,0 +1,22 @@
+cc_binary {
+    name: "vendor.brcm.helloworld-service",
+    vendor: true,
+    relative_install_path: "hw",
+    init_rc: ["vendor.brcm.helloworld-service.rc"],
+    srcs: [
+        "HelloWorld.cpp",
+        "service.cpp",
+    ],
+    shared_libs: [
+        "liblog",
+        "libbase",
+        "libbinder",
+        "libbinder_ndk",
+        "vendor.brcm.helloworld-ndk",
+    ],
+    header_libs: [
+        "libbinder_headers",
+    ],
+
+    vintf_fragments: ["vendor.brcm.hellowworld-manifest.xml"],
+}
