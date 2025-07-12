@@ -24,7 +24,7 @@ cc_binary {
         "libbinder_ndk",
         // This is the AIDL interface that we created
         // The SONG will notice that we using it and it will generate it for us automatically 
-        "vendor.brcm.helloworld-ndk",
+        "vendor.brcm.helloworld-V1-ndk",
     ],
     // vintf_fragments specifies a list of VINTF (Vendor Interface) manifest fragment files to be installed with this binary.
     // These XML files declare the HALs and interfaces provided by the service, allowing Android to recognize and manage.

@@ -10,7 +10,7 @@ cc_library_shared {
         "libbinder_ndk",           // Android Binder NDK library
         "liblog",                  // Android logging library
         "libutils",                // Android utility library
-        "vendor.brcm.helloworld-ndk", // Vendor-specific HelloWorld NDK library
+        "vendor.brcm.helloworld-V1-ndk", // Vendor-specific HelloWorld NDK library
     ],
     // Specifies header-only libraries required for compilation
     header_libs: ["jni_headers"], // JNI headers for native interface

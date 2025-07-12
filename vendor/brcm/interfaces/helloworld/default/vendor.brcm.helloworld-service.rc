@@ -14,10 +14,10 @@ service vendor.brcm.helloworld-service /vendor/bin/hw/vendor.brcm.helloworld-ser
 # - The service runs as the 'root' user and group.
     user root
     group root
-# - SELinux context is set to 'u:r:hal_brcm_hwservice:s0' for proper security labeling.
+# - SELinux context is set to 'u:r:hal_brcm_hellowordservice:s0' for proper security labeling.
 #   When the service is started by Android's init system, the 'seclabel' directive ensures
-#   that the process runs in the 'hal_brcm_hwservice' SELinux domain, regardless of the file label.
+#   that the process runs in the 'hal_brcm_hellowordservice' SELinux domain, regardless of the file label.
 #   This type transition occurs only when init launches the service, allowing SELinux to enforce
 #   specific security policies for this process. The process label controls what the service can access
 #   and how it interacts with other components, providing isolation and protection according to SELinux rules.
-    seclabel u:r:hal_brcm_hwservice:s0
+    seclabel u:r:hal_brcm_hellowordservice:s0

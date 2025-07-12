@@ -24,7 +24,12 @@ extern "C"
 JNIEXPORT jboolean JNICALL
 Java_com_example_helloworld_HelloWorldNative_sayHelloNative(JNIEnv* env, jobject /* thiz */, jstring jmsg) {
     std::cout << "[JNI] sayHelloNative called" << std::endl;
-
+    // Check if the service is declared in the service manager.
+    std::cout << "[JNI] Checking if service is declared..." << std::endl;
+    if (!AServiceManager_isDeclared("vendor.brcm.helloworld.IHelloWorld/default")) {
+        std::cout << "Service not declared!" << std::endl;
+        return -1;
+    }
     // Convert the Java string (jmsg) to a C-style UTF-8 string.
     const char* c_msg = env->GetStringUTFChars(jmsg, nullptr);
     if (!c_msg) {

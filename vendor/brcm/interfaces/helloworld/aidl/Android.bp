@@ -6,7 +6,7 @@ aidl_interface {
     vendor: true,
     // 'unstable: true' means the AIDL interface is not finalized and does not have a stable sdk_version.
     // This is recommended during development, prototyping, or testing.
-    unstable: true,
+    // unstable: true,
     srcs: [
         "vendor/brcm/helloworld/IHelloWorld.aidl",
     ],
