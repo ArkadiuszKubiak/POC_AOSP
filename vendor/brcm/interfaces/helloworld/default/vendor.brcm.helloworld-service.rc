@@ -4,13 +4,13 @@
 service vendor.brcm.helloworld-service /vendor/bin/hw/vendor.brcm.helloworld-service
 # - It runs in the 'hal' class, which is typically used for hardware abstraction layer services.
     class hal
-# - The service exposes the AIDL interface aidl.vendor.brcm.helloworld.IHelloWorld at the 'default' instance.
+# - The service exposes the AIDL interface vendor.brcm.helloworld.IHelloWorld at the 'default' instance.
 #   This directive registers the service implementation with Android's service manager,
 #   making it discoverable and accessible to clients via the specified AIDL interface.
 #   The 'default' instance name allows clients to connect using the standard service lookup.
 #   This enables inter-process communication (IPC) between apps and the HAL service,
 #   facilitating requests and responses as defined in the IHelloWorld interface.
-    interface aidl aidl.vendor.brcm.helloworld.IHelloWorld/default
+    interface aidl vendor.brcm.helloworld.IHelloWorld/default
 # - The service runs as the 'root' user and group.
     user root
     group root

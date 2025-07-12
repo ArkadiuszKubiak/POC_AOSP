@@ -6,17 +6,26 @@ aidl_interface {
     vendor: true,
     // 'unstable: true' means the AIDL interface is not finalized and does not have a stable sdk_version.
     // This is recommended during development, prototyping, or testing.
-    // unstable: true,
     srcs: [
         "vendor/brcm/helloworld/IHelloWorld.aidl",
     ],
+    stability: "vintf",
     // The 'backend' section specifies which language bindings will be generated for this interface.
     backend: {
         cpp: {
-            enabled: true,  // Enable C++ backend for native services/clients.
-        },
-        java: {
-            enabled: true,  // Enable Java backend for Android framework/services.
+            enabled: true, // Enable C++ backend for native services/clients.
         },
     },
+    // 'versions_with_info' specifies a list of version objects for the interface,
+    // each containing a 'version' string and an 'imports' array for dependencies.
+    // In this example, only version "1" is defined with no imports.
+    //
+    // 'frozen: true' indicates that the interface is locked and cannot be modified further.
+    versions_with_info: [
+        {
+            version: "1",
+            imports: [],
+        },
+    ],
+    frozen: true,
 }

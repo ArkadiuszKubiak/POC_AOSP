@@ -29,5 +29,5 @@ cc_binary {
     // vintf_fragments specifies a list of VINTF (Vendor Interface) manifest fragment files to be installed with this binary.
     // These XML files declare the HALs and interfaces provided by the service, allowing Android to recognize and manage.
     // From AOSP level we can check all VINTF by 'lshal' command in terminal
-    vintf_fragments: ["vendor.brcm.hellowworld-manifest.xml"],
+    vintf_fragments: ["vendor.brcm.helloworld-manifest.xml"],
 }
