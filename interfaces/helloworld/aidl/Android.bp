@@ -1,16 +1,22 @@
+// aidl_interface is a Soong build rule used to define an AIDL (Android Interface Definition Language) interface module.
+// It specifies how AIDL files should be compiled and which language bindings (e.g., C++, Java) should be generated for inter-process communication (IPC) in Android.
 aidl_interface {
     name: "vendor.brcm.helloworld",
+    // This interface will be installed in the vendor partition.
     vendor: true,
+    // 'unstable: true' means the AIDL interface is not finalized and does not have a stable sdk_version.
+    // This is recommended during development, prototyping, or testing.
     unstable: true,
     srcs: [
         "vendor/brcm/helloworld/IHelloWorld.aidl",
     ],
+    // The 'backend' section specifies which language bindings will be generated for this interface.
     backend: {
         cpp: {
-            enabled: true,
+            enabled: true,  // Enable C++ backend for native services/clients.
         },
         java: {
-            enabled: true,
+            enabled: true,  // Enable Java backend for Android framework/services.
         },
     },
 }

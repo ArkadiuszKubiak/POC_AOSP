@@ -7,6 +7,24 @@
 
 using aidl::vendor::brcm::helloworld::HelloWorld;
 
+/**
+ * @brief Entry point for the HelloWorld HAL service.
+ *
+ * This function initializes and registers the HelloWorld HAL service with the Android
+ * service manager. It logs the startup process, creates the service instance, and
+ * registers it under the descriptor "HelloWorld/default".
+ *
+ * The registration is performed using AServiceManager_addService, which adds the service
+ * to the Android Binder service manager. This function takes the binder interface pointer
+ * and the instance name as arguments. If the service is successfully registered, it becomes
+ * discoverable and accessible to other processes via Binder IPC. If registration fails,
+ * the function logs an error and exits with a non-zero status.
+ *
+ * Upon successful registration, the service joins the binder thread pool to handle incoming
+ * IPC requests.
+ *
+ * @return int Returns 0 on successful service registration and execution, -1 otherwise.
+ */
 int main() {
     LOG(INFO) << "Starting HelloWorld HAL";
 

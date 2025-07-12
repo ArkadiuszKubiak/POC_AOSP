@@ -1,3 +1,18 @@
+<!--
+    VINTF (Vendor Interface Manifest and Test Framework) is a specification and set of files used in Android 
+    to define and verify the interfaces between the Android framework and device-specific implementations. 
+    Its main goal is to ensure compatibility and modularity between the vendor and system partitions, 
+    enabling easier updates and maintenance.
+    This manifest file defines the AIDL HAL interface for the "vendor.brcm.helloworld" service.
+    - version: Specifies the manifest version.
+    - type: Indicates the manifest type as "device".
+    - hal: Describes the HAL implementation format (AIDL).
+        - name: The name of the HAL interface.
+        - version: The version of the HAL interface.
+        - interface: Details the interface provided.
+            - name: The interface name ("IHelloWorld").
+            - instance: The instance name ("default").
+-->
 <manifest version="1.0" type="device">
     <hal format="aidl">
         <name>vendor.brcm.helloworld</name>

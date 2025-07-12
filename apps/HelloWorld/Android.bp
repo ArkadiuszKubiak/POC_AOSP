@@ -1,32 +1,47 @@
 cc_library_shared {
+    // Defines the name of the shared C++ library to be built
     name: "libhelloworld_jni",
+    // Specifies the source file(s) for the JNI library
     srcs: ["hello_world_jni.cpp"],
+    // Indicates that this library is for vendor partition
     vendor: true,
+    // Lists shared libraries that this JNI library depends on
     shared_libs: [
-        "libbinder_ndk",
-        "liblog",
-        "libutils",
-        "vendor.brcm.helloworld-ndk",
+        "libbinder_ndk",           // Android Binder NDK library
+        "liblog",                  // Android logging library
+        "libutils",                // Android utility library
+        "vendor.brcm.helloworld-ndk", // Vendor-specific HelloWorld NDK library
     ],
-    header_libs: ["jni_headers"],
-    cflags: ["-Wall", "-Werror"],
+    // Specifies header-only libraries required for compilation
+    header_libs: ["jni_headers"], // JNI headers for native interface
+    // Compiler flags for building the library
+    cflags: ["-Wall", "-Werror"], // Enable all warnings and treat warnings as errors
 }
 
 android_app {
+    // Defines the name of the Android application module
     name: "HelloWorld",
+    // Specifies Kotlin source files using glob pattern
     srcs: ["src/**/*.kt"],
+    // Sets the SDK version to use for compilation
     sdk_version: "current",
+    // Indicates that this app is for vendor partition
     vendor: true,
+    // Marks the app as privileged (can access additional system permissions)
     privileged: true,
+    // Kotlin compiler flags for JVM default methods
     kotlincflags: ["-Xjvm-default=all"],
+    // Lists static libraries required by the app
     static_libs: [
-        "androidx.activity_activity-compose",
-        "androidx.compose.ui_ui",
-        "androidx.compose.material3_material3",
-        "androidx.compose.ui_ui-tooling-preview",
-        "androidx.lifecycle_lifecycle-runtime-ktx",
-        "androidx.compose.runtime_runtime",
+        "androidx.activity_activity-compose",         // Compose Activity library
+        "androidx.compose.ui_ui",                     // Compose UI core library
+        "androidx.compose.material3_material3",       // Compose Material3 components
+        "androidx.compose.ui_ui-tooling-preview",     // Compose UI tooling preview
+        "androidx.lifecycle_lifecycle-runtime-ktx",   // Lifecycle runtime for Kotlin
+        "androidx.compose.runtime_runtime",           // Compose runtime library
     ],
-    jni_libs: ["libhelloworld_jni"],
+    // Specifies JNI libraries to be packaged with the app
+    jni_libs: ["libhelloworld_jni"], // JNI library built above
+    // Path to the AndroidManifest.xml file for the app
     manifest: "AndroidManifest.xml",
 }

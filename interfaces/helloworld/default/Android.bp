@@ -1,22 +1,33 @@
+// cc_binary is a Soong build rule used to define a native C/C++ executable binary module.
+// It specifies how to build, link, and install a native service or application in the Android build system.
 cc_binary {
+    // This specified name needs to be added to device.mk file like this:
+    // PRODUCT_PACKAGES += vendor.brcm.helloworld-service
     name: "vendor.brcm.helloworld-service",
+    // This service will be installed in the vendor partition.
     vendor: true,
+    // The PATH will be '/vendor/bin/hw'
     relative_install_path: "hw",
+    // init_rc specifies a list of init .rc files that should be installed with this binary.
+    // These files define how the service is started and managed by Android's
     init_rc: ["vendor.brcm.helloworld-service.rc"],
+    // Our project source files
     srcs: [
         "HelloWorld.cpp",
         "service.cpp",
     ],
+    // Libs that will be used by our project
     shared_libs: [
         "liblog",
         "libbase",
         "libbinder",
         "libbinder_ndk",
+        // This is the AIDL interface that we created
+        // The SONG will notice that we using it and it will generate it for us automatically 
         "vendor.brcm.helloworld-ndk",
     ],
-    header_libs: [
-        "libbinder_headers",
-    ],
-
+    // vintf_fragments specifies a list of VINTF (Vendor Interface) manifest fragment files to be installed with this binary.
+    // These XML files declare the HALs and interfaces provided by the service, allowing Android to recognize and manage.
+    // From AOSP level we can check all VINTF by 'lshal' command in terminal
     vintf_fragments: ["vendor.brcm.hellowworld-manifest.xml"],
 }

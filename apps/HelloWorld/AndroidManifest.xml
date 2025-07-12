@@ -1,3 +1,20 @@
+<!--
+    AndroidManifest.xml for HelloWorld app.
+    This file defines essential information about the Android application, such as its package name, permissions, components (activities, services, etc.), and how it interacts with the system and other apps.
+
+    - Declares the package: com.example.helloworld
+        (A package uniquely identifies the app and is used for organizing its code and resources)
+    - Requests INSTALL_PACKAGES permission (system-level, not for normal apps)
+    - Application attributes:
+        - Label: "HelloWorld"
+        - hasCode: true (contains code)
+        - debuggable: true (app is debuggable)
+    - MainActivity:
+        - Exported: true (can be launched externally)
+        - Intent filter:
+            - Action: MAIN (entry point)
+            - Category: LAUNCHER (appears in launcher)
+-->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.example.helloworld">
 
