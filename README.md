@@ -16,6 +16,29 @@
 - **Path:** `vendor/brcm/interfaces/helloworld/aidl/vendor/brcm/helloworld/IHelloWorld.aidl`
 - **Description:** Defines the AIDL interface for communication between the Android app and the HAL service.
 
+#### AIDL Versioning and API Freezing
+
+AIDL versioning is managed using the `aidl_api` folder, which contains frozen snapshots of your AIDL interface. This ensures backward compatibility and stability for clients using your HAL.
+
+- **Path:** `vendor/brcm/interfaces/helloworld/aidl/aidl_api/vendor.brcm.helloworld/current/`
+- **Description:** Contains the current frozen version of the AIDL interface. These files are immutable and should not be edited manually.
+
+**How to freeze and update the AIDL API:**
+1. Make your changes to the AIDL file (e.g., `IHelloWorld.aidl`).
+2. Run the following command in your AOSP build environment to freeze the API:
+   ```sh
+   m vendor.brcm.helloworld-freeze-api
+   ```
+   This will generate or update the frozen API files in the `aidl_api` directory.
+3. To update the frozen API after making backward-compatible changes, use:
+   ```sh
+   m vendor.brcm.helloworld-update-api
+   ```
+4. Commit the changes in the `aidl_api` folder to your repository to ensure the API version is tracked.
+
+**Note:**  
+Frozen AIDL APIs guarantee that clients depending on your interface will not break due to incompatible changes. Always freeze the API before releasing or integrating with other modules.
+
 ### 4. Android Application
 
 - **Path:** `vendor/brcm/apps/HelloWorld/`
