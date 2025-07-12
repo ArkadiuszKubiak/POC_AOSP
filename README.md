@@ -48,10 +48,9 @@
 
 ---
 
-## Notes
+## License
 
-- This example is for educational and prototyping purposes.
-- SELinux policies are minimal and should be reviewed for production use.
-- The structure is designed for easy integration with AOSP 14 for rbpi4.
+This project is licensed under the MIT License.  
+You are free to use, modify, and distribute this software for any purpose, including commercial and private use.
 
----
+See the [LICENSE](LICENSE) file for the full text of the MIT License.
