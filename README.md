@@ -23,21 +23,21 @@ AIDL versioning is managed using the `aidl_api` folder, which contains frozen sn
 - **Path:** `vendor/brcm/interfaces/helloworld/aidl/aidl_api/vendor.brcm.helloworld/current/`
 - **Description:** Contains the current frozen version of the AIDL interface. These files are immutable and should not be edited manually.
 
-**How to freeze and update the AIDL API:**
+**How to generate and freeze the AIDL API:**
 1. Make your changes to the AIDL file (e.g., `IHelloWorld.aidl`).
-2. Run the following command in your AOSP build environment to freeze the API:
-   ```sh
-   m vendor.brcm.helloworld-freeze-api
-   ```
-   This will generate or update the frozen API files in the `aidl_api` directory.
-3. To update the frozen API after making backward-compatible changes, use:
+2. Run the following command in your AOSP build environment to generate the API:
    ```sh
    m vendor.brcm.helloworld-update-api
+   ```
+   This will generate or update the API files in the `aidl_api` directory.
+3. After generating the API, freeze it to prevent further changes:
+   ```sh
+   m vendor.brcm.helloworld-freeze-api
    ```
 4. Commit the changes in the `aidl_api` folder to your repository to ensure the API version is tracked.
 
 **Note:**  
-Frozen AIDL APIs guarantee that clients depending on your interface will not break due to incompatible changes. Always freeze the API before releasing or integrating with other modules.
+Frozen AIDL APIs guarantee that clients depending on your interface will not break due to incompatible changes. Always generate and freeze the API before releasing or integrating with other modules.
 
 ### 4. Android Application
 
