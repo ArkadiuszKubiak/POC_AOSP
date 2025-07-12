@@ -1,0 +1,52 @@
+# Common SELinux attributes (sets of types):
+
+# domain
+#   - Used for process types (domains). Controls what processes can do.
+#   - Example: type system_server, domain;
+
+# file_type
+#   - Used for file types. Controls access to files.
+#   - Example: type system_file, file_type;
+
+# exec_type
+#   - Used for executable files. Helps define transitions when files are executed.
+#   - Example: type shell_exec, exec_type, file_type;
+
+# device_type
+#   - Used for device nodes (e.g., /dev/*).
+#   - Example: type block_device, device_type;
+
+# vendor_file_type
+#   - Used for files specific to the vendor partition.
+#   - Example: type hal_brcm_hellowordservice_exec, vendor_file_type;
+
+# object_r
+#   - Used for object roles in file_contexts (not assigned in .te files, but seen in contexts).
+#   - Example: u:object_r:system_file:s0
+
+# These attributes allow SELinux to group types and apply rules to sets of objects or processes.
+# Define a new SELinux type for the Broadcom hardware service domain.
+type hal_brcm_hellowordservice, domain;
+
+# Define a new SELinux type for the executable file associated with the Broadcom hardware service.
+# This type is marked as an executable, a file, and a vendor-specific file.
+type hal_brcm_hellowordservice_exec, exec_type, file_type, vendor_file_type;
+
+# Assign the hal_brcm_hellowordservice type to the init daemon domain.
+# This macro sets up the necessary permissions for the service to run as a daemon.
+init_daemon_domain(hal_brcm_hellowordservice)
+
+# Specify a type transition rule:
+# When a process running in the shell domain executes a file labeled hal_brcm_hellowordservice_exec,
+# the new process will run in the hal_brcm_hellowordservice domain.
+type_transition shell hal_brcm_hellowordservice_exec:process hal_brcm_hellowordservice;
+
+# Allow the hal_brcm_hellowordservice domain to perform fork and execmem operations on itself.
+# 'fork' allows creating child processes; 'execmem' allows executing memory regions.
+allow hal_brcm_hellowordservice self:process { fork execmem };
+
+# Allow the hal_brcm_hellowordservice domain to open, read, and execute files labeled as vendor_file.
+allow hal_brcm_hellowordservice vendor_file:file { open read execute };
+
+# Allow the hal_brcm_hellowordservice domain to search, open, and read directories labeled as vendor_file.
+allow hal_brcm_hellowordservice vendor_file:dir { search open read };
