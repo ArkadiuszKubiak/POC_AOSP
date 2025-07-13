@@ -4,7 +4,6 @@ aidl_interface {
     name: "vendor.brcm.helloworld",
     // This interface will be installed in the vendor partition.
     vendor: true,
-    // 'unstable: true' means the AIDL interface is not finalized and does not have a stable sdk_version.
     // This is recommended during development, prototyping, or testing.
     srcs: [
         "vendor/brcm/helloworld/IHelloWorld.aidl",
@@ -20,12 +19,12 @@ aidl_interface {
     // each containing a 'version' string and an 'imports' array for dependencies.
     // In this example, only version "1" is defined with no imports.
     //
-    // 'frozen: true' indicates that the interface is locked and cannot be modified further.
     versions_with_info: [
         {
             version: "1",
             imports: [],
         },
     ],
+    // 'frozen: true' indicates that the interface is locked and cannot be modified further.
     frozen: true,
 }

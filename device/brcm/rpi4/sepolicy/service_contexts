@@ -1,0 +1,2 @@
+# Maps the HelloWorld HAL service to the hal_brcm_helloworld_service security context
+vendor.brcm.helloworld.IHelloWorld/default                                   u:object_r:hal_brcm_helloworld_service:s0

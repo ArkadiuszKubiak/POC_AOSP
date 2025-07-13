@@ -1,52 +1,42 @@
-# Common SELinux attributes (sets of types):
+# SELinux policy for Broadcom HelloWorld HAL service on Raspberry Pi 4
+# Defines security contexts, types, and permissions for the vendor HAL service
 
-# domain
-#   - Used for process types (domains). Controls what processes can do.
-#   - Example: type system_server, domain;
+# SELinux Types and Attributes:
+# - domain: Used for process types (domains). Controls what processes can do.
+# - file_type: Used for file types. Controls access to files.
+# - exec_type: Used for executable files. Helps define transitions when files are executed.
+# - vendor_file_type: Used for files specific to the vendor partition.
+# - service_manager_type: Used for service types that can be registered with service manager.
+# - mlstrustedsubject: Multi-level security trusted subject attribute.
 
-# file_type
-#   - Used for file types. Controls access to files.
-#   - Example: type system_file, file_type;
+# Type definitions
+type hal_brcm_hellowordservice, domain, mlstrustedsubject;         # Service domain
+type hal_brcm_hellowordservice_exec, exec_type, file_type, vendor_file_type; # Executable type
+type hal_brcm_helloworld_service, service_manager_type;            # Service manager type
 
-# exec_type
-#   - Used for executable files. Helps define transitions when files are executed.
-#   - Example: type shell_exec, exec_type, file_type;
-
-# device_type
-#   - Used for device nodes (e.g., /dev/*).
-#   - Example: type block_device, device_type;
-
-# vendor_file_type
-#   - Used for files specific to the vendor partition.
-#   - Example: type hal_brcm_hellowordservice_exec, vendor_file_type;
-
-# object_r
-#   - Used for object roles in file_contexts (not assigned in .te files, but seen in contexts).
-#   - Example: u:object_r:system_file:s0
-
-# These attributes allow SELinux to group types and apply rules to sets of objects or processes.
-# Define a new SELinux type for the Broadcom hardware service domain.
-type hal_brcm_hellowordservice, domain;
-
-# Define a new SELinux type for the executable file associated with the Broadcom hardware service.
-# This type is marked as an executable, a file, and a vendor-specific file.
-type hal_brcm_hellowordservice_exec, exec_type, file_type, vendor_file_type;
-
-# Assign the hal_brcm_hellowordservice type to the init daemon domain.
-# This macro sets up the necessary permissions for the service to run as a daemon.
+# Vendor binder usage and daemon initialization
+vndbinder_use(hal_brcm_hellowordservice);
 init_daemon_domain(hal_brcm_hellowordservice)
 
-# Specify a type transition rule:
-# When a process running in the shell domain executes a file labeled hal_brcm_hellowordservice_exec,
-# the new process will run in the hal_brcm_hellowordservice domain.
+# Domain transition: shell -> hal_brcm_hellowordservice when executing service binary
 type_transition shell hal_brcm_hellowordservice_exec:process hal_brcm_hellowordservice;
 
-# Allow the hal_brcm_hellowordservice domain to perform fork and execmem operations on itself.
-# 'fork' allows creating child processes; 'execmem' allows executing memory regions.
+# Process and file system permissions
 allow hal_brcm_hellowordservice self:process { fork execmem };
-
-# Allow the hal_brcm_hellowordservice domain to open, read, and execute files labeled as vendor_file.
 allow hal_brcm_hellowordservice vendor_file:file { open read execute };
-
-# Allow the hal_brcm_hellowordservice domain to search, open, and read directories labeled as vendor_file.
 allow hal_brcm_hellowordservice vendor_file:dir { search open read };
+
+# Service manager registration and binder communication
+allow hal_brcm_hellowordservice hal_brcm_helloworld_service:service_manager add;
+allow hal_brcm_hellowordservice servicemanager:binder call;
+allow hal_brcm_hellowordservice vndbinder_device:chr_file rw_file_perms;
+allow hal_brcm_hellowordservice servicemanager:binder transfer;
+
+# Debug logging
+allow hal_brcm_hellowordservice kmsg_device:chr_file write;
+
+# Service manager permissions for service discovery and management
+allow servicemanager hal_brcm_hellowordservice:dir search;
+allow servicemanager hal_brcm_hellowordservice:file { open read };
+allow servicemanager hal_brcm_hellowordservice:process getattr;
+allow hal_brcm_hellowordservice servicemanager:service_manager list;
