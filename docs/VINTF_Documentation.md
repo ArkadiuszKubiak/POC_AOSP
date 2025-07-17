@@ -1,5 +1,19 @@
 # VINTF (Vendor Interface) Framework in AOSP
 
+## Overview
+
+This document provides detailed documentation for the VINTF (Vendor Interface) framework in AOSP, focusing on HAL service registration, compatibility mechanisms, and practical implementation examples. It covers the theoretical foundations and practical application of VINTF in the context of the HelloWorld HAL service.
+
+## Author Information
+
+**Created by:** Arkadiusz Kubiak  
+**Purpose:** VINTF Framework Documentation for AOSP HAL Services  
+**Architecture Focus:** Vendor Interface Management and HAL Compatibility
+
+For more information about VINTF framework and AOSP development, feel free to contact the author.
+
+---
+
 ## Table of Contents
 1. [Introduction](#introduction)
 2. [VINTF Components](#vintf-components)

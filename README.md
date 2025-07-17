@@ -1,3 +1,22 @@
+# POC_AOSP: Hello World Example for AOSP 14 on Raspberry Pi 4
+
+## Overview
+
+This project is a complete "Hello World" demonstration for Android Open Source Project (AOSP) 14, targeting the Raspberry Pi 4 (rbpi4) platform. It showcases the integration of a custom kernel driver, a Hardware Abstraction Layer (HAL) service, an AIDL interface, and a privileged Android application. The folder structure strictly follows the AOSP 14 tree for rbpi4, making it easy to merge with your existing AOSP source tree.
+
+**To run this example:**  
+Replace the corresponding files in your AOSP tree for rbpi4 with those from this project, preserving the directory structure.
+
+## Author Information
+
+**Created by:** Arkadiusz Kubiak  
+**Purpose:** Hello World example for AOSP 14 on Raspberry Pi 4  
+**Architecture Focus:** AIDL HAL Services, JNI Integration, and SELinux Policies
+
+For more information about AOSP development and HAL services, feel free to contact the author.
+
+---
+
 ## Component Overview
 
 ### 1. Kernel Driver

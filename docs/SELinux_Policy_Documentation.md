@@ -1,5 +1,19 @@
 # SELinux Policy Documentation for HelloWorld HAL Service
 
+## Overview
+
+This document provides comprehensive documentation for SELinux policies implemented in the HelloWorld HAL service example for AOSP 14 on Raspberry Pi 4. It covers SELinux fundamentals, Android-specific implementations, and detailed analysis of security policies for custom HAL services.
+
+## Author Information
+
+**Created by:** Arkadiusz Kubiak  
+**Purpose:** SELinux Policy Documentation for HelloWorld HAL Service  
+**Architecture Focus:** Security-Enhanced Linux in Android HAL Services
+
+For more information about SELinux and Android security development, feel free to contact the author.
+
+---
+
 ## Table of Contents
 1. [SELinux Overview](#selinux-overview)
 2. [Android SELinux Architecture](#android-selinux-architecture)
