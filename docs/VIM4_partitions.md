@@ -630,33 +630,31 @@ This comprehensive understanding of these commands is essential for anyone worki
 **3. Enter Fastboot Mode:**
 ```bash
 # After reset, interrupt boot again and enter fastboot mode:
-kvim4# fastboot               # Enter fastboot mode
-# OR
-kvim4# run fastboot_key       # Alternative command
+arek# adb reboot bootloader               # Enter fastboot mode
 ```
 
 **4. Switch to Fastbootd:**
 ```bash
 # From host computer (new terminal):
-fastboot reboot fastboot      # Switch to userspace fastboot (fastbootd)
+arek# fastboot reboot fastboot      # Switch to userspace fastboot (fastbootd)
 ```
 
 #### Verification:
 ```bash
 # Verify bootloader is unlocked:
-fastboot getvar unlocked
+arek# fastboot getvar unlocked
 # Should return: unlocked: yes
 
 # Check available partitions:
-fastboot getvar all
+arek# fastboot getvar all
 ```
 
 #### Flash Example:
 ```bash
 # Now you can flash partitions:
-fastboot flash product product.img
-fastboot flash system system.img
-fastboot flash vendor vendor.img
+arek# fastboot flash product product.img
+arek# fastboot flash system system.img
+arek# fastboot flash vendor vendor.img
 ```
 
 ### Important Notes:
