@@ -674,7 +674,6 @@ Recovery environment is launched during:
 - Manual recovery mode entry
 - Fastbootd operations
 - System repair procedures
-- System repair procedures
 
 #### Technical Architecture Comparison
 
