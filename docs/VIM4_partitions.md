@@ -45,14 +45,14 @@
     - [Step-by-Step Process](#step-by-step-process)
       - [1. Setup Serial Connection](#1-setup-serial-connection)
       - [2. Enter U-Boot Console](#2-enter-u-boot-console)
-      - [2. Unlock Bootloader](#2-unlock-bootloader)
+      - [3. Unlock Bootloader](#3-unlock-bootloader)
         - [Understanding U-Boot Environment Variables](#understanding-u-boot-environment-variables)
         - [Command-by-Command Analysis](#command-by-command-analysis)
         - [Complete Security Model Overview](#complete-security-model-overview)
         - [Environment Variables Deep Dive](#environment-variables-deep-dive)
         - [Bootloader Environment Storage Structure](#bootloader-environment-storage-structure)
-      - [3. Enter Fastboot Mode](#3-enter-fastboot-mode)
-      - [4. Switch to Fastbootd](#4-switch-to-fastbootd)
+      - [4. Enter Fastboot Mode](#4-enter-fastboot-mode)
+      - [5. Switch to Fastbootd](#5-switch-to-fastbootd)
         - [Understanding Fastboot vs Fastbootd](#understanding-fastboot-vs-fastbootd)
         - [Technical Architecture Comparison](#technical-architecture-comparison)
         - [Why Switch to Fastbootd?](#why-switch-to-fastbootd)
@@ -88,7 +88,7 @@
   - [7. Runtime Partition Management APIs](#7-runtime-partition-management-apis)
   - [8. A/B Partitioning (Seamless Updates)](#8-ab-partitioning-seamless-updates)
     - [What is A/B Partitioning?](#what-is-ab-partitioning)
-    - [Technical Architecture Overview](#technical-architecture-overview-1)
+    - [Technical Architecture Overview](#technical-architecture-overview)
     - [Why Two Slots? - Problem-Solution Analysis](#why-two-slots---problem-solution-analysis)
     - [Technical Implementation Details](#technical-implementation-details-1)
     - [Update Process Flow](#update-process-flow)
@@ -492,7 +492,7 @@ Hit any key to stop autoboot:  3
 kvim4#
 ```
 
-**2. Unlock Bootloader:**
+**3. Unlock Bootloader:**
 
 #### Understanding U-Boot Environment Variables
 
@@ -733,13 +733,13 @@ kvim4# printenv rollback     # Rollback protection level
 
 This comprehensive understanding of these commands is essential for anyone working with Android bootloader unlocking and custom firmware development on devices like the Khadas VIM4.
 
-**3. Enter Fastboot Mode:**
+**4. Enter Fastboot Mode:**
 ```bash
 # From host computer (new terminal):
 arek# adb reboot bootloader               # Enter fastboot mode
 ```
 
-**4. Switch to Fastbootd:**
+**5. Switch to Fastbootd:**
 
 #### Understanding Fastboot vs Fastbootd
 
