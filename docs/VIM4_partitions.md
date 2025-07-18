@@ -387,13 +387,245 @@ kvim4#
 ```
 
 **2. Unlock Bootloader:**
-```bash
-# In U-Boot console, execute these commands:
-kvim4# setenv lock 0          # Disable bootloader lock
-kvim4# setenv avb2 0          # Disable Android Verified Boot 2.0
-kvim4# saveenv                # Save environment variables to storage
-kvim4# reset                  # Restart the device
+
+#### Understanding U-Boot Environment Variables
+
+U-Boot (Universal Bootloader) uses environment variables to control various aspects of the boot process. These variables are stored in persistent storage and control hardware initialization, security features, and boot behavior.
+
+#### Command-by-Command Analysis:
+
+**`kvim4# setenv lock 0` - Bootloader Lock Control**
+
+**What it is:**
+- `lock` is a U-Boot environment variable that controls the bootloader's security lock state
+- This is a hardware-level security mechanism implemented in the bootloader firmware
+- Acts as the primary gatekeeper for allowing unsigned or modified firmware to be flashed
+
+**Technical Implementation:**
+```c
+// U-Boot bootloader source (pseudo-code)
+int check_bootloader_lock(void) {
+    char *lock_status = env_get("lock");
+    if (lock_status && (strcmp(lock_status, "0") == 0)) {
+        return BOOTLOADER_UNLOCKED;  // Allow custom firmware
+    }
+    return BOOTLOADER_LOCKED;        // Reject unsigned firmware
+}
 ```
+
+**What it controls:**
+- **Fastboot commands:** When `lock=1`, fastboot refuses to flash unsigned partitions
+- **Custom recovery:** Locked bootloader prevents booting unsigned recovery images
+- **Kernel modification:** Blocks loading of unsigned kernel images
+- **System partition writes:** Prevents modification of critical system partitions
+
+**Security implications:**
+- **`lock=1` (default):** Maximum security - only manufacturer-signed images accepted
+- **`lock=0` (unlocked):** Development mode - any firmware can be flashed
+- Used by manufacturers to prevent unauthorized firmware modifications
+
+---
+
+**`kvim4# setenv avb2 0` - Android Verified Boot 2.0 Control**
+
+**What it is:**
+- `avb2` controls Android Verified Boot 2.0 (AVB) verification system
+- AVB is Google's cryptographic boot verification framework
+- Ensures the entire boot chain (bootloader → kernel → system) is authentic and unmodified
+
+**Technical Architecture:**
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Bootloader    │    │   vbmeta.img    │    │  System Images  │
+│                 │    │                 │    │                 │
+│ - Root of Trust │────▶│ - Hash Trees    │────▶│ - boot.img     │
+│ - Public Keys   │    │ - Signatures    │    │ - system.img    │
+│ - AVB Library   │    │ - Rollback      │    │ - vendor.img    │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+```
+
+**AVB Verification Process:**
+1. **Bootloader** reads `vbmeta.img` containing cryptographic metadata
+2. **Hash verification** checks integrity of each partition using Merkle trees
+3. **Signature verification** validates authenticity using manufacturer's public key
+4. **Rollback protection** prevents downgrade to vulnerable firmware versions
+5. **Boot decision** - proceed if all verifications pass, halt if they fail
+
+**What `avb2=0` disables:**
+```c
+// Simplified AVB check in bootloader
+if (env_get_yesno("avb2") == 1) {
+    AvbSlotVerifyResult verify_result;
+    verify_result = avb_slot_verify(ops, requested_partitions, 
+                                   ab_suffix, flags, &slot_data);
+    if (verify_result != AVB_SLOT_VERIFY_RESULT_OK) {
+        printf("AVB verification failed!\n");
+        return -1;  // Halt boot process
+    }
+}
+// If avb2=0, skip all verification and boot directly
+```
+
+**Components affected by AVB:**
+- **Hash tree verification:** Disabled - tampered partitions won't be detected
+- **Signature checking:** Bypassed - unsigned images will be accepted
+- **Rollback protection:** Disabled - older vulnerable firmware can be installed
+- **Root of trust:** Compromised - device cannot guarantee firmware authenticity
+
+---
+
+**`kvim4# saveenv` - Environment Persistence**
+
+**What it is:**
+- `saveenv` commits all current environment variables to persistent storage
+- Without this command, changes exist only in RAM and are lost on reboot
+- Critical step to make bootloader modifications permanent
+
+**Storage locations (device-specific):**
+```bash
+# Common U-Boot environment storage locations:
+# eMMC/SD: Dedicated environment partition (usually 128KB)
+# SPI Flash: Reserved area in bootloader region
+# NAND Flash: Specific blocks marked as environment storage
+
+# VIM4 typically uses eMMC environment partition:
+# /dev/mmcblk0p1 or similar dedicated partition
+```
+
+**Technical process:**
+```c
+// U-Boot environment save process (simplified)
+int saveenv(void) {
+    // 1. Serialize all environment variables to binary format
+    env_data = env_export();
+    
+    // 2. Calculate CRC32 checksum for integrity
+    crc = crc32(0, env_data, ENV_SIZE);
+    
+    // 3. Write to persistent storage (eMMC partition)
+    storage_write(ENV_PARTITION_OFFSET, env_data, ENV_SIZE);
+    
+    // 4. Verify write operation
+    return verify_env_write();
+}
+```
+
+**What happens without `saveenv`:**
+- Environment changes remain in volatile RAM only
+- Next reboot restores previous environment values
+- Bootloader lock and AVB settings revert to defaults
+- All unlock attempts are lost
+
+---
+
+**`kvim4# reset` - System Restart**
+
+**What it is:**
+- `reset` command performs a hardware reset of the entire system
+- Equivalent to power cycling the device
+- Forces bootloader to restart with new environment variables
+
+**Technical implementation:**
+```c
+// U-Boot reset command implementation
+void do_reset(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[]) {
+    // 1. Disable interrupts
+    disable_interrupts();
+    
+    // 2. Flush caches
+    flush_cache_all();
+    
+    // 3. Trigger hardware reset via system control registers
+    // Method varies by SoC (System on Chip)
+    arch_reset_cpu();  // Platform-specific reset mechanism
+    
+    // 4. Infinite loop (should never reach here)
+    while(1);
+}
+```
+
+**Platform-specific reset mechanisms:**
+```c
+// For ARM-based SoCs like Amlogic S905X4 (VIM4)
+void arch_reset_cpu(void) {
+    // Write to hardware reset register
+    writel(RESET_MAGIC_VALUE, WATCHDOG_RESET_REG);
+    // OR
+    writel(RESET_MAGIC_VALUE, SYSTEM_CONTROL_RESET_REG);
+}
+```
+
+**Why reset is necessary:**
+- **Environment reload:** Bootloader re-reads environment from persistent storage
+- **Clean state:** Ensures all subsystems restart with new configuration
+- **Lock verification:** Next boot will respect the new `lock=0` and `avb2=0` settings
+- **Memory clearing:** Removes any cached security states from previous boot
+
+---
+
+#### Complete Security Model Overview
+
+**Before unlocking (`lock=1`, `avb2=1`):**
+```
+┌─────────────┐    ┌──────────────┐    ┌─────────────┐
+│ Signed Only │────▶│ AVB Verified │────▶│ Secure Boot │
+│ Firmware    │    │ Chain        │    │ Process     │
+└─────────────┘    └──────────────┘    └─────────────┘
+      ▲                     ▲                  ▲
+      │                     │                  │
+  Rejects unsigned      Hash & signature   System integrity
+  custom firmware       verification       guaranteed
+```
+
+**After unlocking (`lock=0`, `avb2=0`):**
+```
+┌─────────────┐    ┌──────────────┐    ┌─────────────┐
+│ Any         │────▶│ No           │────▶│ Development │
+│ Firmware    │    │ Verification │    │ Mode Boot   │
+└─────────────┘    └──────────────┘    └─────────────┘
+      ▲                     ▲                  ▲
+      │                     │                  │
+  Accepts any           No security        Custom ROM
+  custom firmware       checks             development
+```
+
+#### Environment Variables Deep Dive
+
+**View all environment variables:**
+```bash
+kvim4# printenv              # Show all variables
+kvim4# printenv lock         # Show specific variable
+kvim4# printenv avb2         # Show AVB status
+```
+
+**Other security-related variables:**
+```bash
+kvim4# printenv secure_boot  # Hardware secure boot status
+kvim4# printenv verified     # Overall verification status  
+kvim4# printenv rollback     # Rollback protection level
+```
+
+#### Bootloader Environment Storage Structure
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                U-Boot Environment Partition              │
+├─────────────────────────────────────────────────────────┤
+│ CRC32 Checksum (4 bytes)                               │
+├─────────────────────────────────────────────────────────┤
+│ Variable 1: lock=0\0                                    │
+├─────────────────────────────────────────────────────────┤
+│ Variable 2: avb2=0\0                                    │
+├─────────────────────────────────────────────────────────┤
+│ Variable 3: bootcmd=run fastboot_key\0                  │
+├─────────────────────────────────────────────────────────┤
+│ ... (other environment variables)                       │
+├─────────────────────────────────────────────────────────┤
+│ \0\0 (End marker)                                       │
+└─────────────────────────────────────────────────────────┘
+```
+
+This comprehensive understanding of these commands is essential for anyone working with Android bootloader unlocking and custom firmware development on devices like the Khadas VIM4.
 
 **3. Enter Fastboot Mode:**
 ```bash
@@ -809,23 +1041,8 @@ def BuildImage(in_dir, prop_dict, out_file):
 
 This architecture provides a comprehensive, layered approach to partition management in AOSP, ensuring reliability, security, and flexibility for modern Android devices like the Khadas VIM4.
 
-## Usage
-
-To analyze your Android build:
-
-```bash
-# Make the script executable
-chmod +x img_files_analysis.sh
-
-# Run the analysis
-./img_files_analysis.sh
-```
-
-The script will provide detailed information about all generated `.img` files and their purposes.
-
 ## Files
 
-- `img_files_analysis.sh` - Main analysis script
 - `README.md` - This documentation file
 
 ## Contributing
