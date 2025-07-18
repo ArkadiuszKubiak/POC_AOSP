@@ -2,8 +2,33 @@
 
 # Khadas VIM4 - Interactive Flash Selection
 # Allows user to select which .img files to flash
+#
+# Author: Arkadiusz Kubiak
+# LinkedIn: https://www.linkedin.com/in/arkadiusz-kubiak-1b4994150
+# Purpose: Interactive Android .img flashing tool for Khadas VIM4
 
 set -e  # Exit on any error
+
+# IMPORTANT: BOOTLOADER MUST BE UNLOCKED BEFORE FLASHING
+# =======================================================
+# Before using this script, you MUST unlock the bootloader on your Khadas VIM4.
+# This requires a USB-TTL converter and serial connection to the device.
+# 
+# For detailed bootloader unlock instructions, see:
+# docs/VIM4_partitions.md - Section: "Khadas VIM4 Bootloader Unlock"
+# 
+# Quick summary:
+# 1. Connect USB-TTL converter to VIM4 GPIO pins (GND, TX, RX)
+# 2. Use serial terminal with 921600 baud rate
+# 3. Enter U-Boot console during boot
+# 4. Run commands:
+#    kvim4# setenv lock 0
+#    kvim4# setenv avb2 0
+#    kvim4# saveenv
+#    kvim4# reset
+# 
+# WARNING: Using this script on a locked bootloader will result in errors!
+# =======================================================
 
 # Configure project directory - change this path as needed
 # Leave empty to use script's location automatically
@@ -26,6 +51,60 @@ echo
 
 # Automatic device preparation
 echo "=== Preparing device for flashing ==="
+
+# Check if bootloader is unlocked
+echo "⚠ BOOTLOADER UNLOCK CHECK ⚠"
+echo "Checking bootloader unlock status..."
+
+# Function to check bootloader variables via fastboot
+check_bootloader_unlock() {
+    echo "Checking U-Boot environment variables..."
+    
+    # Try to get unlocked variable - available in both bootloader and fastbootd mode
+    local unlocked_status=$(fastboot getvar unlocked 2>&1 | grep "unlocked:" | cut -d':' -f2 | tr -d ' ')
+    
+    echo "Current bootloader status:"
+    echo "• unlocked = $unlocked_status"
+    
+    # Check if bootloader is unlocked
+    if [ "$unlocked_status" = "yes" ]; then
+        echo "✓ Bootloader is properly unlocked (unlocked=yes)"
+        return 0
+    else
+        echo "✗ Bootloader is still locked!"
+        echo
+        echo "Expected value:"
+        echo "• unlocked = yes (currently: $unlocked_status)"
+        echo
+        echo "To unlock bootloader:"
+        echo "1. Connect USB-TTL converter to VIM4 GPIO"
+        echo "2. Enter U-Boot console (serial 921600 baud)"
+        echo "3. Run commands:"
+        echo "   kvim4# setenv lock 0"
+        echo "   kvim4# setenv avb2 0"
+        echo "   kvim4# saveenv"
+        echo "   kvim4# reset"
+        echo
+        echo "See detailed instructions: docs/VIM4_partitions.md"
+        echo "Section: 'Khadas VIM4 Bootloader Unlock'"
+        return 1
+    fi
+}
+
+# Manual confirmation if automatic check fails
+echo "Before proceeding, ensure your Khadas VIM4 bootloader is unlocked!"
+echo "If you haven't unlocked it yet, see: docs/VIM4_partitions.md"
+echo "Section: 'Khadas VIM4 Bootloader Unlock'"
+echo
+echo "Press 'y' if bootloader is unlocked, or any other key to exit..."
+read -n 1 -r
+echo
+if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    echo "Please unlock bootloader first using the documentation."
+    echo "Location: docs/VIM4_partitions.md - 'Khadas VIM4 Bootloader Unlock' section"
+    exit 1
+fi
+
 echo "Checking ADB connection..."
 
 # Check if device is connected via ADB
@@ -78,12 +157,61 @@ if adb devices | grep -q "device$"; then
         exit 1
     fi
     
+    # Check bootloader unlock status via fastboot (after switching to fastbootd)
+    if ! check_bootloader_unlock; then
+        echo
+        echo "ERROR: Bootloader is not properly unlocked!"
+        echo "Please unlock bootloader before flashing."
+        exit 1
+    fi
+    
 else
     echo "⚠ No ADB device found"
     echo "Please connect device via USB and ensure USB debugging is enabled"
     echo "Or manually put device in fastboot mode"
     echo "Press Enter when device is ready..."
     read
+    
+    # Check if device is now in fastboot mode and verify unlock status
+    if fastboot devices | grep -q "fastboot"; then
+        echo "✓ Device detected in fastboot mode"
+        
+        # Switch to fastbootd for dynamic partitions
+        echo "Switching to fastbootd for dynamic partition support..."
+        fastboot reboot fastboot
+        
+        echo "Waiting for fastbootd to be ready..."
+        sleep 5
+        
+        # Wait for fastbootd to be ready
+        timeout=30
+        while [ $timeout -gt 0 ]; do
+            if fastboot devices | grep -q "fastboot"; then
+                echo "✓ Device is in fastbootd mode"
+                break
+            fi
+            sleep 1
+            timeout=$((timeout - 1))
+        done
+        
+        if [ $timeout -eq 0 ]; then
+            echo "ERROR: Fastbootd not ready after 30 seconds"
+            echo "Please manually put device in fastboot mode and restart script"
+            exit 1
+        fi
+        
+        # Check bootloader unlock status (after switching to fastbootd)
+        if ! check_bootloader_unlock; then
+            echo
+            echo "ERROR: Bootloader is not properly unlocked!"
+            echo "Please unlock bootloader before flashing."
+            exit 1
+        fi
+    else
+        echo "ERROR: Device not detected in fastboot mode"
+        echo "Please put device in fastboot mode and restart script"
+        exit 1
+    fi
 fi
 
 echo
@@ -231,6 +359,42 @@ fastbootd_files=("system.img" "vendor.img" "product.img" "system_ext.img" "odm.i
 
 # Flash fastboot mode files
 echo "=== Step 1: Flashing bootloader and boot partitions (fastboot mode) ==="
+
+# Check if we need to flash any fastboot mode files
+fastboot_needed=false
+for file in "${selected_files[@]}"; do
+    if [[ " ${fastboot_files[@]} " =~ " ${file} " ]]; then
+        fastboot_needed=true
+        break
+    fi
+done
+
+# If fastboot files are needed, switch back to bootloader fastboot mode
+if [ "$fastboot_needed" = true ]; then
+    echo "Switching back to bootloader fastboot mode for bootloader/boot partitions..."
+    fastboot reboot-bootloader
+    
+    echo "Waiting for bootloader fastboot to be ready..."
+    sleep 5
+    
+    # Wait for bootloader fastboot to be ready
+    timeout=30
+    while [ $timeout -gt 0 ]; do
+        if fastboot devices | grep -q "fastboot"; then
+            echo "✓ Device is in bootloader fastboot mode"
+            break
+        fi
+        sleep 1
+        timeout=$((timeout - 1))
+    done
+    
+    if [ $timeout -eq 0 ]; then
+        echo "ERROR: Bootloader fastboot not ready after 30 seconds"
+        echo "Please manually put device in bootloader fastboot mode and restart script"
+        exit 1
+    fi
+fi
+
 need_fastbootd=false
 for file in "${selected_files[@]}"; do
     if [[ " ${fastboot_files[@]} " =~ " ${file} " ]]; then
@@ -245,9 +409,35 @@ for file in "${selected_files[@]}"; do
     fi
 done
 
-# Flash fastbootd mode files (device is already in fastbootd mode)
+# Flash fastbootd mode files (switch to fastbootd if needed)
 if [ "$need_fastbootd" = true ]; then
     echo "=== Step 2: Flashing dynamic partitions (fastbootd mode) ==="
+    
+    # Switch to fastbootd mode for dynamic partitions
+    echo "Switching to fastbootd for dynamic partition support..."
+    fastboot reboot fastboot
+    
+    echo "Waiting for fastbootd to be ready..."
+    sleep 5
+    
+    # Wait for fastbootd to be ready
+    timeout=30
+    while [ $timeout -gt 0 ]; do
+        if fastboot devices | grep -q "fastboot"; then
+            echo "✓ Device is in fastbootd mode"
+            break
+        fi
+        sleep 1
+        timeout=$((timeout - 1))
+    done
+    
+    if [ $timeout -eq 0 ]; then
+        echo "ERROR: Fastbootd not ready after 30 seconds"
+        echo "Please manually put device in fastbootd mode and restart script"
+        exit 1
+    fi
+    
+    # Flash dynamic partitions
     for file in "${selected_files[@]}"; do
         if [[ " ${fastbootd_files[@]} " =~ " ${file} " ]]; then
             partition="${file%.img}"
@@ -276,6 +466,17 @@ fastboot reboot
 echo
 echo "=== FLASHING COMPLETED ==="
 echo "Selected partitions have been flashed successfully!"
-echo
+echo4
 echo "Device is rebooting..."
 echo "First boot may take several minutes."
+echo
+echo "=== TROUBLESHOOTING ==="
+echo "If flashing failed with 'FAILED (remote: Partition is locked)' errors:"
+echo "• Your bootloader is still locked"
+echo "• Follow unlock instructions in: docs/VIM4_partitions.md"
+echo "• Section: 'Khadas VIM4 Bootloader Unlock'"
+echo
+echo "If device doesn't boot after flashing:"
+echo "• Try flashing essential partitions only"
+echo "• Check if all required files were flashed successfully"
+echo "• Verify bootloader unlock status"
