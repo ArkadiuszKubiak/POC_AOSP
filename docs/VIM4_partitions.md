@@ -629,15 +629,285 @@ This comprehensive understanding of these commands is essential for anyone worki
 
 **3. Enter Fastboot Mode:**
 ```bash
-# After reset, interrupt boot again and enter fastboot mode:
+# From host computer (new terminal):
 arek# adb reboot bootloader               # Enter fastboot mode
 ```
 
 **4. Switch to Fastbootd:**
+
+#### Understanding Fastboot vs Fastbootd
+
+**What is Fastbootd?**
+Fastbootd is the userspace implementation of the fastboot protocol that runs within Android's recovery environment. Unlike traditional bootloader fastboot, fastbootd operates at a higher level and provides advanced partition management capabilities.
+
+#### Technical Architecture Comparison
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Bootloader Fastboot                         │
+├─────────────────────────────────────────────────────────────────┤
+│ • Runs in bootloader (U-Boot)                                  │
+│ • Limited partition support                                    │
+│ • Static partition flashing only                               │
+│ • No dynamic partition awareness                               │
+│ • Direct hardware access                                       │
+└─────────────────────────────────────────────────────────────────┘
+                               ↓
+                    fastboot reboot fastboot
+                               ↓
+┌─────────────────────────────────────────────────────────────────┐
+│                     Fastbootd (Userspace)                      │
+├─────────────────────────────────────────────────────────────────┤
+│ • Runs in Android recovery environment                         │
+│ • Full dynamic partition support                               │
+│ • Super partition management                                   │
+│ • Logical partition resizing                                   │
+│ • Advanced Android-aware operations                            │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### Why Switch to Fastbootd?
+
+**Limitations of Bootloader Fastboot:**
+```c
+// Bootloader fastboot limitations
+typedef struct {
+    partition_support_t static_only;        // Only fixed-size partitions
+    super_partition_t unsupported;          // Cannot handle super partition
+    logical_partitions_t unavailable;       // No logical partition awareness
+    resize_operations_t impossible;         // Cannot resize partitions
+    metadata_management_t limited;          // Basic partition table only
+} bootloader_fastboot_t;
+```
+
+**Fastbootd Capabilities:**
+```c
+// Fastbootd advanced features
+typedef struct {
+    partition_support_t dynamic_aware;      // Handles logical partitions
+    super_partition_t fully_supported;      // Complete super partition management
+    logical_partitions_t available;         // Can create/delete logical partitions
+    resize_operations_t supported;          // Real-time partition resizing
+    metadata_management_t advanced;         // LP metadata manipulation
+    android_integration_t complete;         // Full Android system awareness
+} fastbootd_capabilities_t;
+```
+
+#### Technical Implementation Details
+
+**Fastbootd Boot Process:**
+```cpp
+// system/core/fastboot/device/main.cpp
+int main(int argc, char* argv[]) {
+    // 1. Initialize recovery environment
+    RecoveryUI* ui = device_ui();
+    
+    // 2. Mount essential partitions
+    ensure_path_mounted("/metadata");
+    ensure_path_mounted("/data");
+    
+    // 3. Initialize fastboot daemon
+    FastbootDevice fastboot_device;
+    
+    // 4. Start USB gadget for communication
+    if (!fastboot_device.StartFastbootd()) {
+        LOG(ERROR) << "Failed to start fastbootd";
+        return -1;
+    }
+    
+    // 5. Enter command loop
+    return fastboot_device.Main();
+}
+```
+
+**Super Partition Management:**
+```cpp
+// system/core/fastboot/device/commands.cpp
+bool FastbootDevice::FlashPartition(const std::string& partition_name,
+                                   const std::vector<char>& data) {
+    // Check if partition is logical (in super partition)
+    if (android::fs_mgr::IsLogicalPartition(partition_name)) {
+        // Use libdm for dynamic partition operations
+        auto& dm = android::dm::DeviceMapper::Instance();
+        
+        // Resize logical partition if needed
+        if (!ResizeLogicalPartition(partition_name, data.size())) {
+            return false;
+        }
+        
+        // Flash to logical partition
+        return FlashLogicalPartition(partition_name, data);
+    }
+    
+    // Fall back to traditional partition flashing
+    return FlashPhysicalPartition(partition_name, data);
+}
+```
+
+#### Command Execution and Transition
+
 ```bash
-# From host computer (new terminal):
+# Switch to fastbootd from bootloader fastboot
 arek# fastboot reboot fastboot      # Switch to userspace fastboot (fastbootd)
 ```
+
+**What happens during this command:**
+
+1. **Bootloader Receives Command:**
+   ```c
+   // U-Boot fastboot implementation
+   void fastboot_reboot_fastboot(void) {
+       // Set boot target to recovery/fastbootd
+       env_set("boot_fastbootd", "1");
+       
+       // Trigger system reboot
+       do_reset(NULL, 0, 0, NULL);
+   }
+   ```
+
+2. **Recovery Boot Process:**
+   ```bash
+   # Device boots into recovery mode with fastbootd flag
+   U-Boot → Recovery Kernel → Recovery Ramdisk → Fastbootd daemon
+   ```
+
+3. **Fastbootd Initialization:**
+   ```cpp
+   // Recovery init starts fastbootd
+   if (boot_into_fastbootd) {
+       // Mount necessary partitions
+       mount_metadata_partition();
+       mount_system_partitions();
+       
+       // Start fastbootd service
+       start_fastbootd_daemon();
+   }
+   ```
+
+#### Partition Support Comparison
+
+**Bootloader Fastboot Supported Partitions:**
+```bash
+# Traditional static partitions only
+fastboot flash bootloader bootloader.img    ✓ Supported
+fastboot flash dtb dtb.img                  ✓ Supported  
+fastboot flash boot boot.img                ✓ Supported
+fastboot flash vbmeta vbmeta.img            ✓ Supported
+
+# Dynamic partitions - LIMITED or UNSUPPORTED
+fastboot flash system system.img            ✗ May fail on dynamic systems
+fastboot flash vendor vendor.img            ✗ May fail on dynamic systems
+fastboot flash product product.img          ✗ Usually unsupported
+```
+
+**Fastbootd Supported Partitions:**
+```bash
+# All partition types supported
+fastboot flash system system.img            ✓ Full support + resizing
+fastboot flash vendor vendor.img            ✓ Full support + resizing
+fastboot flash product product.img          ✓ Full support + resizing
+fastboot flash system_ext system_ext.img    ✓ Full support + resizing
+fastboot flash odm odm.img                  ✓ Full support + resizing
+
+# Advanced operations
+fastboot create-logical-partition system_b 2147483648    ✓ Logical partition creation
+fastboot delete-logical-partition product_a              ✓ Logical partition deletion
+fastboot resize-logical-partition vendor_b 536870912     ✓ Real-time resizing
+```
+
+#### Verification and Status Check
+
+**Check Current Fastboot Mode:**
+```bash
+# Verify you're in fastbootd (not bootloader fastboot)
+arek# fastboot getvar is-userspace
+# Should return: is-userspace: yes
+
+# Check fastbootd version
+arek# fastboot getvar version
+# Should return: version: fastbootd-<android_version>
+
+# List available logical partitions
+arek# fastboot getvar super-partition-name
+# Should return: super-partition-name: super
+
+# Check dynamic partition support
+arek# fastboot getvar dynamic-partition
+# Should return: dynamic-partition: true
+```
+
+#### Practical Example: Dynamic Partition Flashing
+
+**Before (Bootloader Fastboot - Limited):**
+```bash
+# May fail on devices with dynamic partitions
+arek# fastboot flash system system.img
+FAILED (remote: 'Partition not found or insufficient space')
+```
+
+**After (Fastbootd - Full Support):**
+```bash
+# Seamless flashing with automatic resizing
+arek# fastboot reboot fastboot           # Switch to fastbootd
+arek# fastboot flash system system.img   # Automatically resizes logical partition
+Resizing 'system' partition to 2048MB...
+Flashing 'system' partition...
+OKAY [  45.123s]
+finished. total time: 45.123s
+```
+
+#### Error Handling and Troubleshooting
+
+**Common Issues:**
+```bash
+# Device doesn't support fastbootd
+arek# fastboot reboot fastboot
+FAILED (remote: 'Command not supported')
+# Solution: Device has older Android version without fastbootd support
+
+# Fastbootd fails to start
+arek# fastboot reboot fastboot
+# Device reboots but fastboot commands fail
+# Solution: Check USB drivers, cable connection, or recovery partition corruption
+```
+
+**Debug Commands:**
+```bash
+# Check if device is in fastbootd mode
+arek# fastboot devices
+1234567890abcdef	fastbootd    # Note "fastbootd" suffix
+
+# If showing "fastboot" instead of "fastbootd":
+1234567890abcdef	fastboot     # Still in bootloader mode
+
+# Force fastbootd mode (alternative method)
+arek# fastboot reboot recovery
+# Then manually select "Enter fastboot" from recovery menu
+```
+
+#### Performance and Capabilities
+
+**Fastbootd Advantages:**
+```
+• Dynamic partition support: Can handle super partition and logical volumes
+• Real-time resizing: Adjusts partition sizes automatically during flashing
+• Metadata awareness: Understands LP (Logical Partition) metadata format
+• Android integration: Access to Android's storage management APIs
+• Error recovery: Better error handling and recovery mechanisms
+• Modern protocol: Supports latest fastboot protocol extensions
+```
+
+**Use Cases Requiring Fastbootd:**
+```
+1. Flashing Android 10+ devices with dynamic partitions
+2. Custom ROM installation on modern devices
+3. Partition layout modifications
+4. Super partition management
+5. A/B slot operations on logical partitions
+6. GSI (Generic System Image) flashing
+```
+
+This transition to fastbootd is essential for modern Android development and represents the evolution from simple bootloader-based flashing to sophisticated userspace partition management.
 
 #### Verification:
 ```bash
@@ -943,13 +1213,314 @@ class BootControlInterface {
 ```
 
 **Slot Management Architecture:**
-```
-Slot A: system_a, vendor_a, boot_a
-Slot B: system_b, vendor_b, boot_b
 
-Active Slot: A (system runs from A)
-Update Slot: B (updates write to B)
+#### What is A/B Partitioning?
+
+A/B partitioning, also known as "seamless updates" or "dual-boot partitioning," is a sophisticated update mechanism introduced in Android 7.0 (Nougat). It maintains two complete copies of critical system partitions on the device, allowing updates to be installed in the background while the device continues to operate normally.
+
+#### Technical Architecture Overview
+
 ```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Physical Storage Layout                      │
+├─────────────────────────────────────────────────────────────────┤
+│ Slot A Partitions        │        Slot B Partitions            │
+├─────────────────────────────────────────────────────────────────┤
+│ boot_a     │ system_a    │ boot_b     │ system_b                │
+│ vendor_a   │ dtbo_a      │ vendor_b   │ dtbo_b                  │
+│ vbmeta_a   │ product_a   │ vbmeta_b   │ product_b               │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Current State Example:**
+```
+Active Slot: A (device boots from and runs on Slot A)
+Inactive Slot: B (receives updates, ready for next boot)
+
+┌─────────────────┐    ┌─────────────────┐
+│   SLOT A        │    │   SLOT B        │
+│   (ACTIVE)      │    │   (INACTIVE)    │
+├─────────────────┤    ├─────────────────┤
+│ ✓ Running OS    │    │ ○ Updated OS    │
+│ ✓ User Apps     │    │ ○ New Apps      │
+│ ✓ System Data   │    │ ○ Ready to Boot │
+└─────────────────┘    └─────────────────┘
+```
+
+#### Why Two Slots? - Problem-Solution Analysis
+
+**Traditional Update Problems (Pre-A/B):**
+
+1. **Device Unusable During Updates:**
+   ```
+   Update Process: Device OFF → Flash partitions → Reboot → Hope it works
+   Risk: Brick device if update fails or power loss occurs
+   ```
+
+2. **Single Point of Failure:**
+   ```
+   ┌─────────────────┐
+   │ Single System   │ ← If update corrupts this, device is bricked
+   │ Partition       │
+   └─────────────────┘
+   ```
+
+3. **No Rollback Capability:**
+   ```
+   Bad Update → Corrupted System → Factory Reset Required → Data Loss
+   ```
+
+**A/B Solution Benefits:**
+
+1. **Seamless Updates:**
+   ```
+   Update Process: Device ON → Background update to inactive slot → 
+                   Quick reboot → Switch slots → Continue using device
+   ```
+
+2. **Automatic Rollback:**
+   ```
+   ┌─────────────────┐    ┌─────────────────┐
+   │ Known Good      │    │ Updated System  │
+   │ System (Slot A) │◄───┤ (Slot B)        │
+   └─────────────────┘    └─────────────────┘
+            ▲                       │
+            │                       ▼
+            └─── Auto rollback if boot fails
+   ```
+
+3. **Zero Downtime:**
+   ```
+   User Experience: Normal usage → Brief reboot → Updated system
+   No waiting, no "Installing update..." screens
+   ```
+
+#### Technical Implementation Details
+
+**Partition Duplication:**
+```c
+// Example partition layout for A/B system
+typedef struct {
+    // Critical system partitions (duplicated)
+    partition_t boot_a, boot_b;           // Kernel + ramdisk
+    partition_t system_a, system_b;       // Android framework
+    partition_t vendor_a, vendor_b;       // HAL implementations
+    partition_t vbmeta_a, vbmeta_b;       // Verification metadata
+    partition_t dtbo_a, dtbo_b;           // Device tree overlays
+    
+    // Shared partitions (not duplicated)
+    partition_t userdata;                 // User apps and data
+    partition_t metadata;                 // Partition metadata
+    partition_t bootloader;               // Bootloader itself
+} ab_partition_layout_t;
+```
+
+**Slot State Management:**
+```c
+// Boot control interface implementation
+typedef struct {
+    uint8_t priority;        // Boot priority (0-15, higher = more important)
+    uint8_t tries_remaining; // Retry attempts before marking as unbootable
+    uint8_t successful_boot; // 1 if slot booted successfully
+    uint8_t verity_corrupted; // 1 if dm-verity detected corruption
+} slot_metadata_t;
+
+// Example slot states
+slot_metadata_t slot_a = {
+    .priority = 15,          // Highest priority
+    .tries_remaining = 7,    // Maximum retries
+    .successful_boot = 1,    // Last boot was successful
+    .verity_corrupted = 0    // No corruption detected
+};
+
+slot_metadata_t slot_b = {
+    .priority = 14,          // Lower priority (inactive)
+    .tries_remaining = 7,    // Ready for use
+    .successful_boot = 0,    // Not yet booted
+    .verity_corrupted = 0    // Clean state
+};
+```
+
+#### Update Process Flow
+
+**Step-by-Step A/B Update Process:**
+
+1. **Update Detection:**
+   ```
+   Update Engine → Checks for updates → Downloads OTA package
+   ```
+
+2. **Background Installation:**
+   ```cpp
+   // Update engine installs to inactive slot
+   bool InstallUpdate() {
+       inactive_slot = GetInactiveSlot();  // Get slot B if A is active
+       
+       // Install new system.img to system_b
+       FlashPartition("system_" + inactive_slot, new_system_image);
+       
+       // Install new vendor.img to vendor_b  
+       FlashPartition("vendor_" + inactive_slot, new_vendor_image);
+       
+       // Update boot partition
+       FlashPartition("boot_" + inactive_slot, new_boot_image);
+       
+       return true;
+   }
+   ```
+
+3. **Slot Switch Preparation:**
+   ```cpp
+   // Mark new slot as bootable
+   bool PrepareSlotSwitch() {
+       SetSlotAsUnbootable(current_slot);     // Mark current slot lower priority
+       SetSlotAsBootable(inactive_slot);      // Mark updated slot higher priority
+       SetSlotAsActive(inactive_slot);        // Set as next boot target
+       
+       return true;
+   }
+   ```
+
+4. **Reboot and Verification:**
+   ```cpp
+   // Bootloader boot decision logic
+   int SelectBootSlot() {
+       slot_a_priority = GetSlotPriority(SLOT_A);
+       slot_b_priority = GetSlotPriority(SLOT_B);
+       
+       if (slot_a_priority > slot_b_priority && IsSlotBootable(SLOT_A)) {
+           return SLOT_A;
+       } else if (IsSlotBootable(SLOT_B)) {
+           return SLOT_B;
+       }
+       
+       return SLOT_INVALID;  // No bootable slots - recovery mode
+   }
+   ```
+
+5. **Boot Success Verification:**
+   ```cpp
+   // Android init process
+   void VerifyBootSuccess() {
+       if (IsFirstBootAfterUpdate()) {
+           // System boots successfully
+           MarkBootSuccessful(GetCurrentSlot());
+           
+           // Optional: Mark old slot as unbootable to save space
+           // SetSlotAsUnbootable(GetInactiveSlot());
+       }
+   }
+   ```
+
+#### Failure Handling and Rollback
+
+**Automatic Rollback Scenarios:**
+
+1. **Boot Failure Detection:**
+   ```cpp
+   // Bootloader retry logic
+   int AttemptBoot(int slot) {
+       tries_remaining = GetSlotTriesRemaining(slot);
+       
+       if (tries_remaining > 0) {
+           DecrementSlotTries(slot);
+           return BootFromSlot(slot);
+       } else {
+           // Mark slot as unbootable
+           SetSlotAsUnbootable(slot);
+           return TryAlternateSlot();
+       }
+   }
+   ```
+
+2. **System Corruption Detection:**
+   ```cpp
+   // dm-verity corruption handling
+   void HandleVerityCorruption() {
+       current_slot = GetCurrentSlot();
+       
+       // Mark current slot as corrupted
+       SetSlotVerityCorrupted(current_slot);
+       SetSlotAsUnbootable(current_slot);
+       
+       // Trigger reboot to alternate slot
+       TriggerRebootToAlternateSlot();
+   }
+   ```
+
+3. **User-Space Failure Recovery:**
+   ```cpp
+   // Update engine watchdog
+   void MonitorSystemHealth() {
+       if (DetectSystemFailure()) {
+           // System is unstable after update
+           RollbackToKnownGoodSlot();
+           NotifyUserOfRollback();
+       }
+   }
+   ```
+
+#### Storage and Performance Implications
+
+**Storage Requirements:**
+```
+Traditional Single Slot: 100% storage for system partitions
+A/B Dual Slot:          200% storage for system partitions
+
+Example calculation:
+- system.img: 2GB × 2 = 4GB
+- vendor.img: 500MB × 2 = 1GB  
+- boot.img: 64MB × 2 = 128MB
+- Total overhead: ~2.5GB additional storage required
+```
+
+**Performance Characteristics:**
+```
+Update Download:     Same as traditional (background)
+Update Installation: Faster (no device downtime)
+Update Application:  ~10 seconds (just reboot time)
+Rollback Time:       ~10 seconds (automatic on boot failure)
+```
+
+#### Real-World Example: VIM4 A/B Layout
+
+```bash
+# Typical A/B partition layout on Khadas VIM4
+/dev/block/by-name/boot_a        # Kernel + ramdisk (Slot A)
+/dev/block/by-name/boot_b        # Kernel + ramdisk (Slot B)
+/dev/block/by-name/system_a      # Android framework (Slot A)
+/dev/block/by-name/system_b      # Android framework (Slot B)  
+/dev/block/by-name/vendor_a      # HAL implementations (Slot A)
+/dev/block/by-name/vendor_b      # HAL implementations (Slot B)
+/dev/block/by-name/vbmeta_a      # Verification metadata (Slot A)
+/dev/block/by-name/vbmeta_b      # Verification metadata (Slot B)
+
+# Shared partitions (no duplication needed)
+/dev/block/by-name/userdata      # User data and applications
+/dev/block/by-name/metadata      # Partition metadata
+/dev/block/by-name/misc          # Recovery communication
+/dev/block/by-name/bootloader    # U-Boot bootloader
+```
+
+#### Development and Testing Benefits
+
+**For Developers:**
+```
+- Safe testing: Flash experimental builds to inactive slot
+- Quick recovery: Always have working system in other slot
+- Bisecting bugs: Easy to switch between builds
+- Continuous integration: Automated testing with rollback
+```
+
+**For Manufacturers:**
+```
+- Reduced support costs: Fewer bricked devices
+- Faster deployment: Updates without service interruption  
+- Better user experience: No "updating" downtime
+- Quality assurance: Automatic rollback on failures
+```
+
+This A/B partitioning system represents a fundamental shift in how Android handles system updates, providing unprecedented reliability and user experience improvements while enabling more aggressive update deployment strategies.
 
 ### 9. File System Management Layer
 
