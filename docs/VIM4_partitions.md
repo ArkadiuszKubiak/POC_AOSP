@@ -660,6 +660,22 @@ arek# adb reboot bootloader               # Enter fastboot mode
 **What is Fastbootd?**
 Fastbootd is the userspace implementation of the fastboot protocol that runs within Android's recovery environment. Unlike traditional bootloader fastboot, fastbootd operates at a higher level and provides advanced partition management capabilities.
 
+**Android Recovery Environment** is a special runtime environment in the Android system that operates independently from the main operating system. The recovery environment contains:
+- **Minimal Linux kernel** - essential system functions
+- **Recovery ramdisk** - RAM-based filesystem with necessary tools
+- **Fastbootd daemon** - service handling fastboot protocol in userspace mode
+- **Partition management tools** - libdm, liblp for dynamic partition handling
+- **Mount system** - access to /metadata, /data partitions
+- **USB gadget interface** - communication with host via USB
+
+Recovery environment is launched during:
+- Factory reset operations
+- OTA (Over-The-Air) updates
+- Manual recovery mode entry
+- Fastbootd operations
+- System repair procedures
+- System repair procedures
+
 #### Technical Architecture Comparison
 
 ```
@@ -1064,15 +1080,167 @@ AOSP manages partitions through multiple layers, from bootloader initialization 
 
 ### 6. Device Mapper for Dynamic Partitions
 
-**dm-linear mapping:**
-- Maps logical partitions to physical blocks
-- Translates logical offset to physical
-- Redirects I/O to appropriate device
+Device Mapper (DM) is a Linux kernel framework that provides a generic way to create virtual block devices. In Android, it's essential for implementing dynamic partitions and various storage features.
 
-**libdm Interface:**
-- Creates device-mapper mapping
-- Registers new block device (/dev/block/mapper/system_a)
+#### **Core Device Mapper Concepts**
+
+**What is Device Mapper?**
+- Kernel subsystem for creating virtual block devices
+- Maps virtual devices to underlying physical storage
+- Enables advanced storage features like logical volumes, encryption, and verification
+- Provides abstraction layer between filesystem and hardware
+
+#### **Device Mapper Targets Used in Android**
+
+**1. dm-linear - Linear Mapping**
 ```
+┌─────────────────┐    ┌─────────────────┐
+│ Logical Partition│    │ Physical Storage│
+│   (system_a)    │────▶│   Super         │
+│   0-2GB         │    │   Partition     │
+└─────────────────┘    │   Sectors       │
+                       │   1000-5000     │
+                       └─────────────────┘
+```
+- Maps logical partitions to contiguous physical blocks
+- Translates logical offset to physical offset within super partition
+- Most common target for dynamic partitions
+
+**2. dm-verity - Verification**
+- Provides cryptographic verification of partition integrity
+- Creates read-only hash tree for data verification
+- Detects any unauthorized modifications to system partitions
+
+**3. dm-crypt - Encryption**
+- Encrypts/decrypts data on-the-fly
+- Used for userdata partition encryption (FDE/FBE)
+- Transparent encryption layer
+
+#### **Dynamic Partition Implementation**
+
+**Logical Partition Mapping Process:**
+1. **Metadata Parsing** - liblp reads LP metadata from super partition
+2. **DM Table Creation** - Creates device-mapper table for each logical partition
+3. **Device Registration** - Registers virtual block device (/dev/block/mapper/system_a)
+4. **I/O Redirection** - All filesystem I/O redirected through DM layer
+
+**Example DM Table for system_a:**
+```bash
+# dmsetup table system_a
+0 4194304 linear /dev/block/mmcblk0p20 2048
+# Format: start_sector count target_type target_args
+# Maps 4194304 sectors (2GB) starting at sector 0 of system_a
+# to physical sectors 2048+ on /dev/block/mmcblk0p20 (super partition)
+```
+
+#### **libdm Interface and APIs**
+
+**libdm Functions:**
+- `DmCreateDevice()` - Creates new device-mapper device
+- `DmDeleteDevice()` - Removes device-mapper device
+- `DmLoadTable()` - Loads mapping table for device
+- `DmResumeDevice()` - Activates device mapping
+
+**Code Flow Example:**
+```cpp
+// Simplified libdm usage for logical partition
+DeviceMapper& dm = DeviceMapper::Instance();
+
+// Create DM device for system_a
+dm.CreateDevice("system_a", DmTable({
+    DmTarget(0, sectors, "linear", "/dev/block/super", offset)
+}));
+
+// Result: /dev/block/mapper/system_a becomes available
+```
+
+#### **Integration with Android Storage Stack**
+
+**Storage Layer Integration:**
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Android Applications                         │
+├─────────────────────────────────────────────────────────────────┤
+│                    VFS (ext4, f2fs)                            │
+├─────────────────────────────────────────────────────────────────┤
+│             Device Mapper Virtual Devices                      │
+│      /dev/block/mapper/system_a, vendor_a, product_a           │
+├─────────────────────────────────────────────────────────────────┤
+│                   Device Mapper Layer                          │
+│    dm-linear, dm-verity, dm-crypt targets                     │
+├─────────────────────────────────────────────────────────────────┤
+│                Physical Block Devices                          │
+│           /dev/block/mmcblk0p20 (super partition)              │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### **Real-World Example: VIM4 Dynamic Partitions**
+
+**Physical Layout:**
+```bash
+/dev/block/mmcblk0p20   # Super partition (physical)
+├── LP Metadata         # Logical partition metadata
+├── system_a           # Logical partition 1
+├── vendor_a           # Logical partition 2
+├── product_a          # Logical partition 3
+└── free space         # Available for partition expansion
+```
+
+**Device Mapper Mapping:**
+```bash
+# After DM setup, virtual devices are created:
+/dev/block/mapper/system_a    -> maps to super partition sectors 2048-4194351
+/dev/block/mapper/vendor_a    -> maps to super partition sectors 4194352-5242879
+/dev/block/mapper/product_a   -> maps to super partition sectors 5242880-6291407
+
+# These virtual devices behave like real partitions
+mount /dev/block/mapper/system_a /system
+mount /dev/block/mapper/vendor_a /vendor
+```
+
+#### **Dynamic Partition Resize Operations**
+
+**Resize Process:**
+1. **Unmount filesystem** from logical partition
+2. **Delete old DM device** using libdm
+3. **Update LP metadata** with new partition size
+4. **Create new DM device** with updated mapping
+5. **Resize filesystem** to new partition size
+6. **Remount filesystem**
+
+**Fastbootd Resize Example:**
+```bash
+# Resize system_a from 2GB to 3GB
+fastboot resize-logical-partition system_a 3221225472
+
+# What happens internally:
+# 1. Update LP metadata: system_a size = 3GB
+# 2. dmsetup remove system_a
+# 3. dmsetup create system_a with new table
+# 4. resize2fs /dev/block/mapper/system_a
+```
+
+#### **Debugging Device Mapper**
+
+**Useful Commands:**
+```bash
+# List all device-mapper devices
+dmsetup ls
+
+# Show mapping table for device
+dmsetup table system_a
+
+# Show device status
+dmsetup status system_a
+
+# Show dependencies
+dmsetup deps system_a
+
+# Remove device
+dmsetup remove system_a
+```
+
+This Device Mapper implementation is crucial for Android's dynamic partition system, providing the flexibility to resize partitions at runtime while maintaining filesystem integrity and security verification.
 
 ### 7. Runtime Partition Management APIs
 
