@@ -318,21 +318,6 @@ adb shell lshal | grep -v @
 adb shell lshal | grep camera
 ```
 
-#### VINTF Compatibility:
-```bash
-# Check system compatibility
-adb shell vintf
-
-# Verify vendor compatibility
-adb shell vintf --check-compat
-
-# Get framework requirements
-adb shell vintf --get-framework-matrix
-
-# Get device manifest
-adb shell vintf --get-device-manifest
-```
-
 ## IMG Files Categorization
 
 ### 1. Essential System Files (Always Required)
