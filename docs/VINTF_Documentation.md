@@ -8,7 +8,8 @@ This document provides detailed documentation for the VINTF (Vendor Interface) f
 
 **Created by:** Arkadiusz Kubiak  
 **Purpose:** VINTF Framework Documentation for AOSP HAL Services  
-**Architecture Focus:** Vendor Interface Management and HAL Compatibility
+**Architecture Focus:** Vendor Interface Management and HAL Compatibility  
+**LinkedIn:** [www.linkedin.com/in/arkadiusz-kubiak-1b4994150](https://www.linkedin.com/in/arkadiusz-kubiak-1b4994150)
 
 For more information about VINTF framework and AOSP development, feel free to contact the author.
 

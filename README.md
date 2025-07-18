@@ -11,7 +11,8 @@ Replace the corresponding files in your AOSP tree for rbpi4 with those from this
 
 **Created by:** Arkadiusz Kubiak  
 **Purpose:** Hello World example for AOSP 14 on Raspberry Pi 4  
-**Architecture Focus:** AIDL HAL Services, JNI Integration, and SELinux Policies
+**Architecture Focus:** AIDL HAL Services, JNI Integration, and SELinux Policies  
+**LinkedIn:** [www.linkedin.com/in/arkadiusz-kubiak-1b4994150](https://www.linkedin.com/in/arkadiusz-kubiak-1b4994150)
 
 For more information about AOSP development and HAL services, feel free to contact the author.
 

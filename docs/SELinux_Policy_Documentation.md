@@ -8,7 +8,8 @@ This document provides comprehensive documentation for SELinux policies implemen
 
 **Created by:** Arkadiusz Kubiak  
 **Purpose:** SELinux Policy Documentation for HelloWorld HAL Service  
-**Architecture Focus:** Security-Enhanced Linux in Android HAL Services
+**Architecture Focus:** Security-Enhanced Linux in Android HAL Services  
+**LinkedIn:** [www.linkedin.com/in/arkadiusz-kubiak-1b4994150](https://www.linkedin.com/in/arkadiusz-kubiak-1b4994150)
 
 For more information about SELinux and Android security development, feel free to contact the author.
 

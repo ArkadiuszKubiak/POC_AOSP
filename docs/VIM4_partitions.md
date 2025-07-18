@@ -114,7 +114,8 @@ This repository contains comprehensive analysis and documentation for Android .i
 
 **Created by:** Arkadiusz Kubiak  
 **Purpose:** Analysis of Android .img files for Khadas VIM4  
-**Architecture Focus:** Project Treble and Dynamic Partitions
+**Architecture Focus:** Project Treble and Dynamic Partitions  
+**LinkedIn:** [www.linkedin.com/in/arkadiusz-kubiak-1b4994150](https://www.linkedin.com/in/arkadiusz-kubiak-1b4994150)
 
 For more information about Android flashing and development, feel free to contact the author.
 
@@ -291,32 +292,6 @@ VINTF is the compatibility layer between Android Framework and Vendor HAL implem
 - Compatibility matrices - define required/optional HAL versions
 - Framework Compatibility Matrix (FCM) - framework requirements
 - Device Manifest - vendor HAL implementations
-
-### HAL Interface Evolution:
-- **HIDL** (Hardware Interface Definition Language) - Android 8.0+
-- **AIDL** (Android Interface Definition Language) - Android 11+
-- **Passthrough HAL** - legacy compatibility mode
-- **Binderized HAL** - modern IPC communication
-
-### Debugging Commands
-
-#### Check HAL Services:
-```bash
-# List all running HAL services
-adb shell lshal
-
-# List HAL services with types
-adb shell lshal -t
-
-# Check HIDL services (Android 8+)
-adb shell lshal | grep @
-
-# Check AIDL services (Android 11+)
-adb shell lshal | grep -v @
-
-# Check specific HAL service
-adb shell lshal | grep camera
-```
 
 ## IMG Files Categorization
 
