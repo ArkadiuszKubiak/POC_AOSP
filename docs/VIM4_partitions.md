@@ -430,7 +430,7 @@ VCC(3.3V)        →  Pin 20               →  Power (optional)
 **1. Setup Serial Connection:**
 ```bash
 # Install serial communication software (Linux example):
-sudo apt install minicom screen
+sudo apt install minicom screen putty
 
 # Connect using minicom:
 sudo minicom -D /dev/ttyUSB0 -b 921600
@@ -456,6 +456,40 @@ kvim4#
 
 #### Understanding U-Boot Environment Variables
 
+##### What is U-Boot?
+
+**U-Boot (Universal Bootloader)** is the most widely used open-source bootloader in the embedded systems industry. Originally created by **Wolfgang Denk** in 1999 at DENX Software Engineering, U-Boot has evolved into the de facto standard bootloader for embedded Linux systems.
+
+##### Primary Functions:
+- **Hardware Initialization** - Configure CPU, memory controllers, and peripherals
+- **Boot Source Management** - Load kernel from various sources (eMMC, SD, network, USB)
+- **Runtime Environment** - Provide interactive console for debugging and configuration
+- **Platform Abstraction** - Abstract hardware differences for kernel compatibility
+- **Security Framework** - Implement secure boot chains and verified boot mechanisms
+
+##### Essential U-Boot Commands:
+```bash
+printenv              # Display environment variables
+setenv lock 0          # Unlock bootloader
+setenv avb2 0          # Disable Android Verified Boot
+saveenv                # Save environment to persistent storage
+reset                  # Reset the system
+bootm                  # Boot kernel image
+mmc list               # List MMC devices
+usb start              # Initialize USB subsystem
+```
+
+##### Why U-Boot for Android Devices?
+
+**Android-Specific Requirements:**
+- **Fastboot Protocol** - Standard Android flashing interface
+- **AVB Integration** - Android Verified Boot support
+- **A/B Partitioning** - Seamless update mechanism
+- **Device Tree Support** - Hardware description for kernel
+- **Security Features** - Secure boot and anti-rollback
+
+##### Environment Variables - Core Concept
+
 U-Boot (Universal Bootloader) uses environment variables to control various aspects of the boot process. These variables are stored in persistent storage and control hardware initialization, security features, and boot behavior.
 
 #### Command-by-Command Analysis:
@@ -466,18 +500,6 @@ U-Boot (Universal Bootloader) uses environment variables to control various aspe
 - `lock` is a U-Boot environment variable that controls the bootloader's security lock state
 - This is a hardware-level security mechanism implemented in the bootloader firmware
 - Acts as the primary gatekeeper for allowing unsigned or modified firmware to be flashed
-
-**Technical Implementation:**
-```c
-// U-Boot bootloader source (pseudo-code)
-int check_bootloader_lock(void) {
-    char *lock_status = env_get("lock");
-    if (lock_status && (strcmp(lock_status, "0") == 0)) {
-        return BOOTLOADER_UNLOCKED;  // Allow custom firmware
-    }
-    return BOOTLOADER_LOCKED;        // Reject unsigned firmware
-}
-```
 
 **What it controls:**
 - **Fastboot commands:** When `lock=1`, fastboot refuses to flash unsigned partitions
@@ -517,21 +539,6 @@ int check_bootloader_lock(void) {
 4. **Rollback protection** prevents downgrade to vulnerable firmware versions
 5. **Boot decision** - proceed if all verifications pass, halt if they fail
 
-**What `avb2=0` disables:**
-```c
-// Simplified AVB check in bootloader
-if (env_get_yesno("avb2") == 1) {
-    AvbSlotVerifyResult verify_result;
-    verify_result = avb_slot_verify(ops, requested_partitions, 
-                                   ab_suffix, flags, &slot_data);
-    if (verify_result != AVB_SLOT_VERIFY_RESULT_OK) {
-        printf("AVB verification failed!\n");
-        return -1;  // Halt boot process
-    }
-}
-// If avb2=0, skip all verification and boot directly
-```
-
 **Components affected by AVB:**
 - **Hash tree verification:** Disabled - tampered partitions won't be detected
 - **Signature checking:** Bypassed - unsigned images will be accepted
@@ -548,33 +555,10 @@ if (env_get_yesno("avb2") == 1) {
 - Critical step to make bootloader modifications permanent
 
 **Storage locations (device-specific):**
-```bash
-# Common U-Boot environment storage locations:
-# eMMC/SD: Dedicated environment partition (usually 128KB)
-# SPI Flash: Reserved area in bootloader region
-# NAND Flash: Specific blocks marked as environment storage
-
-# VIM4 typically uses eMMC environment partition:
-# /dev/mmcblk0p1 or similar dedicated partition
-```
-
-**Technical process:**
-```c
-// U-Boot environment save process (simplified)
-int saveenv(void) {
-    // 1. Serialize all environment variables to binary format
-    env_data = env_export();
-    
-    // 2. Calculate CRC32 checksum for integrity
-    crc = crc32(0, env_data, ENV_SIZE);
-    
-    // 3. Write to persistent storage (eMMC partition)
-    storage_write(ENV_PARTITION_OFFSET, env_data, ENV_SIZE);
-    
-    // 4. Verify write operation
-    return verify_env_write();
-}
-```
+- eMMC/SD: Dedicated environment partition (usually 128KB)
+- SPI Flash: Reserved area in bootloader region  
+- NAND Flash: Specific blocks marked as environment storage
+- VIM4 typically uses eMMC environment partition
 
 **What happens without `saveenv`:**
 - Environment changes remain in volatile RAM only
@@ -590,36 +574,6 @@ int saveenv(void) {
 - `reset` command performs a hardware reset of the entire system
 - Equivalent to power cycling the device
 - Forces bootloader to restart with new environment variables
-
-**Technical implementation:**
-```c
-// U-Boot reset command implementation
-void do_reset(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[]) {
-    // 1. Disable interrupts
-    disable_interrupts();
-    
-    // 2. Flush caches
-    flush_cache_all();
-    
-    // 3. Trigger hardware reset via system control registers
-    // Method varies by SoC (System on Chip)
-    arch_reset_cpu();  // Platform-specific reset mechanism
-    
-    // 4. Infinite loop (should never reach here)
-    while(1);
-}
-```
-
-**Platform-specific reset mechanisms:**
-```c
-// For ARM-based SoCs like Amlogic S905X4 (VIM4)
-void arch_reset_cpu(void) {
-    // Write to hardware reset register
-    writel(RESET_MAGIC_VALUE, WATCHDOG_RESET_REG);
-    // OR
-    writel(RESET_MAGIC_VALUE, SYSTEM_CONTROL_RESET_REG);
-}
-```
 
 **Why reset is necessary:**
 - **Environment reload:** Bootloader re-reads environment from persistent storage
@@ -735,80 +689,34 @@ Fastbootd is the userspace implementation of the fastboot protocol that runs wit
 #### Why Switch to Fastbootd?
 
 **Limitations of Bootloader Fastboot:**
-```c
-// Bootloader fastboot limitations
-typedef struct {
-    partition_support_t static_only;        // Only fixed-size partitions
-    super_partition_t unsupported;          // Cannot handle super partition
-    logical_partitions_t unavailable;       // No logical partition awareness
-    resize_operations_t impossible;         // Cannot resize partitions
-    metadata_management_t limited;          // Basic partition table only
-} bootloader_fastboot_t;
-```
+- Only fixed-size partitions supported
+- Cannot handle super partition
+- No logical partition awareness
+- Cannot resize partitions
+- Basic partition table management only
 
 **Fastbootd Capabilities:**
-```c
-// Fastbootd advanced features
-typedef struct {
-    partition_support_t dynamic_aware;      // Handles logical partitions
-    super_partition_t fully_supported;      // Complete super partition management
-    logical_partitions_t available;         // Can create/delete logical partitions
-    resize_operations_t supported;          // Real-time partition resizing
-    metadata_management_t advanced;         // LP metadata manipulation
-    android_integration_t complete;         // Full Android system awareness
-} fastbootd_capabilities_t;
-```
+- Handles logical partitions
+- Complete super partition management
+- Can create/delete logical partitions
+- Real-time partition resizing
+- Advanced LP metadata manipulation
+- Full Android system awareness
 
 #### Technical Implementation Details
 
 **Fastbootd Boot Process:**
-```cpp
-// system/core/fastboot/device/main.cpp
-int main(int argc, char* argv[]) {
-    // 1. Initialize recovery environment
-    RecoveryUI* ui = device_ui();
-    
-    // 2. Mount essential partitions
-    ensure_path_mounted("/metadata");
-    ensure_path_mounted("/data");
-    
-    // 3. Initialize fastboot daemon
-    FastbootDevice fastboot_device;
-    
-    // 4. Start USB gadget for communication
-    if (!fastboot_device.StartFastbootd()) {
-        LOG(ERROR) << "Failed to start fastbootd";
-        return -1;
-    }
-    
-    // 5. Enter command loop
-    return fastboot_device.Main();
-}
-```
+1. Initialize recovery environment
+2. Mount essential partitions (/metadata, /data)
+3. Initialize fastboot daemon
+4. Start USB gadget for communication
+5. Enter command loop
 
 **Super Partition Management:**
-```cpp
-// system/core/fastboot/device/commands.cpp
-bool FastbootDevice::FlashPartition(const std::string& partition_name,
-                                   const std::vector<char>& data) {
-    // Check if partition is logical (in super partition)
-    if (android::fs_mgr::IsLogicalPartition(partition_name)) {
-        // Use libdm for dynamic partition operations
-        auto& dm = android::dm::DeviceMapper::Instance();
-        
-        // Resize logical partition if needed
-        if (!ResizeLogicalPartition(partition_name, data.size())) {
-            return false;
-        }
-        
-        // Flash to logical partition
-        return FlashLogicalPartition(partition_name, data);
-    }
-    
-    // Fall back to traditional partition flashing
-    return FlashPhysicalPartition(partition_name, data);
-}
-```
+- Check if partition is logical (in super partition)
+- Use libdm for dynamic partition operations
+- Resize logical partition if needed
+- Flash to logical partition or fall back to traditional partition flashing
 
 #### Command Execution and Transition
 
@@ -820,35 +728,17 @@ arek# fastboot reboot fastboot      # Switch to userspace fastboot (fastbootd)
 **What happens during this command:**
 
 1. **Bootloader Receives Command:**
-   ```c
-   // U-Boot fastboot implementation
-   void fastboot_reboot_fastboot(void) {
-       // Set boot target to recovery/fastbootd
-       env_set("boot_fastbootd", "1");
-       
-       // Trigger system reboot
-       do_reset(NULL, 0, 0, NULL);
-   }
-   ```
+   - Set boot target to recovery/fastbootd
+   - Trigger system reboot
 
 2. **Recovery Boot Process:**
-   ```bash
-   # Device boots into recovery mode with fastbootd flag
-   U-Boot → Recovery Kernel → Recovery Ramdisk → Fastbootd daemon
-   ```
+   - Device boots into recovery mode with fastbootd flag
+   - U-Boot → Recovery Kernel → Recovery Ramdisk → Fastbootd daemon
 
 3. **Fastbootd Initialization:**
-   ```cpp
-   // Recovery init starts fastbootd
-   if (boot_into_fastbootd) {
-       // Mount necessary partitions
-       mount_metadata_partition();
-       mount_system_partitions();
-       
-       // Start fastbootd service
-       start_fastbootd_daemon();
-   }
-   ```
+   - Recovery init starts fastbootd
+   - Mount necessary partitions
+   - Start fastbootd service
 
 #### Partition Support Comparison
 
@@ -1106,46 +996,20 @@ AOSP manages partitions through multiple layers, from bootloader initialization 
 - Partitions are defined in Device Tree Blob (DTB)
 - U-Boot reads partition table from eMMC/UFS storage
 - Bootloader passes partition information to kernel via command line
-
-```c
-// Example partition definition in Device Tree
-partitions {
-    boot {
-        reg = <0x0 0x4000000>;  // offset, size
-        label = "boot";
-    };
-    system {
-        reg = <0x4000000 0x40000000>;
-        label = "system";
-    };
-};
-```
+- Partition definitions include offset, size, and label
 
 ### 2. Kernel Level - Block Layer
 
 **Partition Parser:**
-```c
-// fs/partitions/core.c
-struct parsed_partitions *check_partition(struct gendisk *hd, 
-                                         struct block_device *bdev)
-{
-    // Detects partition table type (GPT, MBR)
-    // Parses partition metadata
-    // Creates data structures for each partition
-}
-```
+- Detects partition table type (GPT, MBR)
+- Parses partition metadata
+- Creates data structures for each partition
 
 **GPT Parser:**
-```c
-// fs/partitions/efi.c
-int efi_partition(struct parsed_partitions *state)
-{
-    // Reads GPT header
-    // Parses GPT entries
-    // Verifies checksums
-    // Registers partitions in the system
-}
-```
+- Reads GPT header
+- Parses GPT entries
+- Verifies checksums
+- Registers partitions in the system
 
 ### 3. Android Init Process
 
@@ -1158,28 +1022,17 @@ int efi_partition(struct parsed_partitions *state)
 ```
 
 **Init Mount Process:**
-```cpp
-// system/core/init/mount_handler.cpp
-bool DoMount(const FstabEntry& entry) {
-    // Waits for block device availability
-    // Verifies filesystem
-    // Mounts partition at appropriate location
-    // Sets system properties
-}
-```
+- Waits for block device availability
+- Verifies filesystem
+- Mounts partition at appropriate location
+- Sets system properties
 
 ### 4. Dynamic Partitions (Super Partition)
 
 **liblp (libpartition) Management:**
-```cpp
-// system/core/fs_mgr/liblp/builder.cpp
-class MetadataBuilder {
-    // Manages super partition metadata
-    bool AddPartition(const std::string& name, uint64_t size);
-    bool ResizePartition(const std::string& name, uint64_t size);
-    bool RemovePartition(const std::string& name);
-};
-```
+- Manages super partition metadata
+- Can add, resize, and remove partitions
+- Handles logical partition operations
 
 **Super Partition Layout:**
 ```
@@ -1199,84 +1052,46 @@ class MetadataBuilder {
 ### 5. Fastboot and Flashing Operations
 
 **Fastboot Protocol Implementation:**
-```cpp
-// system/core/fastboot/fastboot.cpp
-void flash_partition(const std::string& partition, const std::string& filename) {
-    // Opens .img file
-    // Checks partition size
-    // Sends data over USB/TCP
-    // Verifies write operation
-}
-```
+- Opens .img file
+- Checks partition size
+- Sends data over USB/TCP
+- Verifies write operation
 
 **Fastbootd (Userspace Fastboot):**
-```cpp
-// system/core/fastboot/device/commands.cpp
-bool FlashPartition(const std::string& partition_name,
-                   const std::vector<char>& data) {
-    // Uses libdm (device-mapper) for dynamic partitions
-    // Can resize logical partitions
-    // Updates super partition metadata
-}
-```
+- Uses libdm (device-mapper) for dynamic partitions
+- Can resize logical partitions
+- Updates super partition metadata
 
 ### 6. Device Mapper for Dynamic Partitions
 
 **dm-linear mapping:**
-```cpp
-// kernel/drivers/md/dm-linear.c
-// Maps logical partitions to physical blocks
-static int linear_map(struct dm_target *ti, struct bio *bio)
-{
-    // Translates logical offset to physical
-    // Redirects I/O to appropriate device
-}
-```
+- Maps logical partitions to physical blocks
+- Translates logical offset to physical
+- Redirects I/O to appropriate device
 
 **libdm Interface:**
-```cpp
-// system/core/fs_mgr/libdm/dm.cpp
-bool CreateDevice(const std::string& name,
-                 const DmTable& table) {
-    // Creates device-mapper mapping
-    // Registers new block device
-    // /dev/block/mapper/system_a
-}
+- Creates device-mapper mapping
+- Registers new block device (/dev/block/mapper/system_a)
 ```
 
 ### 7. Runtime Partition Management APIs
 
 **Storage Manager Framework:**
-```java
-// frameworks/base/core/java/android/os/storage/StorageManager.java
-public class StorageManager {
-    // Manages mount/unmount operations
-    // Monitors partition status
-    // Notifies applications of changes
-}
-```
+- Manages mount/unmount operations
+- Monitors partition status
+- Notifies applications of changes
 
 **Vold (Volume Daemon):**
-```cpp
-// system/vold/VolumeManager.cpp
-class VolumeManager {
-    // Daemon managing volumes
-    // Handles encryption/decryption
-    // Manages adoptable storage
-}
-```
+- Daemon managing volumes
+- Handles encryption/decryption
+- Manages adoptable storage
 
 ### 8. A/B Partitioning (Seamless Updates)
 
 **Update Engine Boot Control:**
-```cpp
-// system/update_engine/common/boot_control_interface.h
-class BootControlInterface {
-    virtual bool SetActiveBootSlot(unsigned int slot) = 0;
-    virtual unsigned int GetCurrentSlot() = 0;
-    // Switches between slot A and slot B
-}
-```
+- SetActiveBootSlot() - switches between slot A and slot B
+- GetCurrentSlot() - returns currently active slot
+- Manages boot slot operations
 
 **Slot Management Architecture:**
 
@@ -1364,48 +1179,14 @@ Inactive Slot: B (receives updates, ready for next boot)
 #### Technical Implementation Details
 
 **Partition Duplication:**
-```c
-// Example partition layout for A/B system
-typedef struct {
-    // Critical system partitions (duplicated)
-    partition_t boot_a, boot_b;           // Kernel + ramdisk
-    partition_t system_a, system_b;       // Android framework
-    partition_t vendor_a, vendor_b;       // HAL implementations
-    partition_t vbmeta_a, vbmeta_b;       // Verification metadata
-    partition_t dtbo_a, dtbo_b;           // Device tree overlays
-    
-    // Shared partitions (not duplicated)
-    partition_t userdata;                 // User apps and data
-    partition_t metadata;                 // Partition metadata
-    partition_t bootloader;               // Bootloader itself
-} ab_partition_layout_t;
-```
+- Critical system partitions are duplicated (boot, system, vendor, vbmeta, dtbo)
+- Shared partitions are not duplicated (userdata, metadata, bootloader)
 
 **Slot State Management:**
-```c
-// Boot control interface implementation
-typedef struct {
-    uint8_t priority;        // Boot priority (0-15, higher = more important)
-    uint8_t tries_remaining; // Retry attempts before marking as unbootable
-    uint8_t successful_boot; // 1 if slot booted successfully
-    uint8_t verity_corrupted; // 1 if dm-verity detected corruption
-} slot_metadata_t;
-
-// Example slot states
-slot_metadata_t slot_a = {
-    .priority = 15,          // Highest priority
-    .tries_remaining = 7,    // Maximum retries
-    .successful_boot = 1,    // Last boot was successful
-    .verity_corrupted = 0    // No corruption detected
-};
-
-slot_metadata_t slot_b = {
-    .priority = 14,          // Lower priority (inactive)
-    .tries_remaining = 7,    // Ready for use
-    .successful_boot = 0,    // Not yet booted
-    .verity_corrupted = 0    // Clean state
-};
-```
+- Boot priority (0-15, higher = more important)
+- Retry attempts before marking as unbootable
+- Successful boot flag
+- Verity corruption flag
 
 #### Update Process Flow
 
@@ -1417,136 +1198,56 @@ slot_metadata_t slot_b = {
    ```
 
 2. **Background Installation:**
-   ```cpp
-   // Update engine installs to inactive slot
-   bool InstallUpdate() {
-       inactive_slot = GetInactiveSlot();  // Get slot B if A is active
-       
-       // Install new system.img to system_b
-       FlashPartition("system_" + inactive_slot, new_system_image);
-       
-       // Install new vendor.img to vendor_b  
-       FlashPartition("vendor_" + inactive_slot, new_vendor_image);
-       
-       // Update boot partition
-       FlashPartition("boot_" + inactive_slot, new_boot_image);
-       
-       return true;
-   }
-   ```
+   - Update engine installs to inactive slot
+   - Install new system.img to system_b
+   - Install new vendor.img to vendor_b
+   - Update boot partition
 
 3. **Slot Switch Preparation:**
-   ```cpp
-   // Mark new slot as bootable
-   bool PrepareSlotSwitch() {
-       SetSlotAsUnbootable(current_slot);     // Mark current slot lower priority
-       SetSlotAsBootable(inactive_slot);      // Mark updated slot higher priority
-       SetSlotAsActive(inactive_slot);        // Set as next boot target
-       
-       return true;
-   }
-   ```
+   - Mark current slot lower priority
+   - Mark updated slot higher priority
+   - Set updated slot as next boot target
 
 4. **Reboot and Verification:**
-   ```cpp
-   // Bootloader boot decision logic
-   int SelectBootSlot() {
-       slot_a_priority = GetSlotPriority(SLOT_A);
-       slot_b_priority = GetSlotPriority(SLOT_B);
-       
-       if (slot_a_priority > slot_b_priority && IsSlotBootable(SLOT_A)) {
-           return SLOT_A;
-       } else if (IsSlotBootable(SLOT_B)) {
-           return SLOT_B;
-       }
-       
-       return SLOT_INVALID;  // No bootable slots - recovery mode
-   }
-   ```
+   - Bootloader selects highest priority bootable slot
+   - If no bootable slots available, enter recovery mode
 
 5. **Boot Success Verification:**
-   ```cpp
-   // Android init process
-   void VerifyBootSuccess() {
-       if (IsFirstBootAfterUpdate()) {
-           // System boots successfully
-           MarkBootSuccessful(GetCurrentSlot());
-           
-           // Optional: Mark old slot as unbootable to save space
-           // SetSlotAsUnbootable(GetInactiveSlot());
-       }
-   }
-   ```
+   - Android init process verifies successful boot
+   - Mark boot as successful for current slot
 
 #### Failure Handling and Rollback
 
 **Automatic Rollback Scenarios:**
 
 1. **Boot Failure Detection:**
-   ```cpp
-   // Bootloader retry logic
-   int AttemptBoot(int slot) {
-       tries_remaining = GetSlotTriesRemaining(slot);
-       
-       if (tries_remaining > 0) {
-           DecrementSlotTries(slot);
-           return BootFromSlot(slot);
-       } else {
-           // Mark slot as unbootable
-           SetSlotAsUnbootable(slot);
-           return TryAlternateSlot();
-       }
-   }
-   ```
+   - Bootloader retry logic decrements tries_remaining
+   - If tries reach zero, mark slot as unbootable
+   - Try alternate slot
 
 2. **System Corruption Detection:**
-   ```cpp
-   // dm-verity corruption handling
-   void HandleVerityCorruption() {
-       current_slot = GetCurrentSlot();
-       
-       // Mark current slot as corrupted
-       SetSlotVerityCorrupted(current_slot);
-       SetSlotAsUnbootable(current_slot);
-       
-       // Trigger reboot to alternate slot
-       TriggerRebootToAlternateSlot();
-   }
-   ```
+   - dm-verity detects corruption
+   - Mark current slot as corrupted and unbootable
+   - Trigger reboot to alternate slot
 
 3. **User-Space Failure Recovery:**
-   ```cpp
-   // Update engine watchdog
-   void MonitorSystemHealth() {
-       if (DetectSystemFailure()) {
-           // System is unstable after update
-           RollbackToKnownGoodSlot();
-           NotifyUserOfRollback();
-       }
-   }
-   ```
+   - Update engine monitors system health
+   - If system failure detected, rollback to known good slot
+   - Notify user of rollback
 
 #### Storage and Performance Implications
 
 **Storage Requirements:**
-```
-Traditional Single Slot: 100% storage for system partitions
-A/B Dual Slot:          200% storage for system partitions
-
-Example calculation:
-- system.img: 2GB × 2 = 4GB
-- vendor.img: 500MB × 2 = 1GB  
-- boot.img: 64MB × 2 = 128MB
+- Traditional Single Slot: 100% storage for system partitions
+- A/B Dual Slot: 200% storage for system partitions
+- Example: system.img (2GB × 2 = 4GB), vendor.img (500MB × 2 = 1GB), boot.img (64MB × 2 = 128MB)
 - Total overhead: ~2.5GB additional storage required
-```
 
 **Performance Characteristics:**
-```
-Update Download:     Same as traditional (background)
-Update Installation: Faster (no device downtime)
-Update Application:  ~10 seconds (just reboot time)
-Rollback Time:       ~10 seconds (automatic on boot failure)
-```
+- Update Download: Same as traditional (background)
+- Update Installation: Faster (no device downtime)
+- Update Application: ~10 seconds (just reboot time)
+- Rollback Time: ~10 seconds (automatic on boot failure)
 
 #### Real-World Example: VIM4 A/B Layout
 
@@ -1571,67 +1272,43 @@ Rollback Time:       ~10 seconds (automatic on boot failure)
 #### Development and Testing Benefits
 
 **For Developers:**
-```
 - Safe testing: Flash experimental builds to inactive slot
 - Quick recovery: Always have working system in other slot
 - Bisecting bugs: Easy to switch between builds
 - Continuous integration: Automated testing with rollback
-```
 
 **For Manufacturers:**
-```
 - Reduced support costs: Fewer bricked devices
 - Faster deployment: Updates without service interruption  
 - Better user experience: No "updating" downtime
 - Quality assurance: Automatic rollback on failures
-```
 
 This A/B partitioning system represents a fundamental shift in how Android handles system updates, providing unprecedented reliability and user experience improvements while enabling more aggressive update deployment strategies.
 
 ### 9. File System Management Layer
 
 **fs_mgr (File System Manager):**
-```cpp
-// system/core/fs_mgr/fs_mgr.cpp
-int fs_mgr_mount_all(struct fstab *fstab) {
-    // Mounts all partitions from fstab
-    // Handles different filesystems (ext4, f2fs)
-    // Verifies dm-verity
-}
-```
+- Mounts all partitions from fstab
+- Handles different filesystems (ext4, f2fs)
+- Verifies dm-verity
 
 **Verity/Integrity Verification:**
-```cpp
-// system/core/fs_mgr/fs_mgr_verity.cpp
-int load_verity_table(const std::string& device,
-                     const std::string& name) {
-    // Loads hash tree for integrity verification
-    // Uses device-mapper verity target
-}
-```
+- Loads hash tree for integrity verification
+- Uses device-mapper verity target
 
 ### 10. Build System Integration
 
 **BoardConfig.mk Partition Definitions:**
-```makefile
-# Partition definitions in build system
-BOARD_BOOTIMAGE_PARTITION_SIZE := 67108864
-BOARD_SYSTEMIMAGE_PARTITION_SIZE := 3221225472
-BOARD_VENDORIMAGE_PARTITION_SIZE := 536870912
-
-# Dynamic partitions configuration
-BOARD_SUPER_PARTITION_SIZE := 6442450944
-BOARD_SUPER_PARTITION_GROUPS := khadas_dynamic_partitions
-```
+- BOARD_BOOTIMAGE_PARTITION_SIZE - Boot partition size
+- BOARD_SYSTEMIMAGE_PARTITION_SIZE - System partition size  
+- BOARD_VENDORIMAGE_PARTITION_SIZE - Vendor partition size
+- BOARD_SUPER_PARTITION_SIZE - Super partition size
+- BOARD_SUPER_PARTITION_GROUPS - Dynamic partition groups
 
 **Image Creation Process:**
-```python
-# build/tools/releasetools/build_image.py
-def BuildImage(in_dir, prop_dict, out_file):
-    # Creates .img file from directory
-    # Sets partition size
-    # Adds filesystem metadata
-```
+- Creates .img file from directory
+- Sets partition size
+- Adds filesystem metadata
 
 ### Partition Management Flow
 
