@@ -157,22 +157,7 @@ Each target inherits different configuration files:
 
 ### Standard Car SDK
 ```bash
-emulator -avd car_avd -no-snapshot-load -no-snapshot-save
+emulator -no-snapshot-load -no-snapshot-save
 ```
-
-### Multi-Display Car SDK
-```bash
-# Launch with multi-display support
-emulator -avd car_md_avd -no-snapshot-load -no-snapshot-save \
-    -multidisplay-support true \
-    -car-multidisplay-config "1,968,792,160,0,2,1408,792,160,0,3,1408,792,160,0"
-```
-
-### Portrait Car SDK
-```bash
-emulator -avd car_portrait_avd -no-snapshot-load -no-snapshot-save -skin 768x1280
-```
-
----
 
 *Note: All targets are based on the trunk_staging branch and built in userdebug mode for development purposes.*

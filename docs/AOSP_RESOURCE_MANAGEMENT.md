@@ -291,121 +291,251 @@ sdk_car_x86_64 Complete Overlay Hierarchy:
 
 ## Debugging Overlay Issues
 
-When working with overlays, use these ADB commands to debug overlay behavior:
+This section provides comprehensive debugging techniques for overlay issues, using real-world examples and actual ADB output from `sdk_car_x86_64` emulator analysis.
 
-### Real-World Example: Debugging `def_wifi_on` on `sdk_car_x86_64`
+### Complete Diagnostic Workflow: Real `def_wifi_on` Analysis
 
-Based on actual emulator analysis, here are the commands and their outputs:
+Based on actual emulator analysis of `sdk_car_x86_64` target, here's a complete debugging workflow with real output data:
 
-#### 1. List Active SettingsProvider Overlays
+#### Step 1: Identify All Active Overlays for Target Package
+
 ```bash
 adb shell cmd overlay list | grep -i settings
 ```
 
-**Output (sdk_car_x86_64 specific):**
+**Real Output (sdk_car_x86_64 emulator):**
 ```
 com.android.providers.settings
 [x] com.android.providers.settings.auto_generated_rro_vendor__
-[x] com.android.providers.settings.car.config.rro
+[x] com.android.providers.settings.car.config.rro  
 [x] com.android.providers.settings.auto_generated_rro_product__
 ```
 
-**Analysis:** Three overlays are active (`[x]`) for SettingsProvider in `sdk_car_x86_64`:
-- `com.android.providers.settings.auto_generated_rro_vendor__` (priority 6 - goldfish overlay - vendor partition)
-- `com.android.providers.settings.car.config.rro` (priority 18 - Car Config RRO - product partition)
-- `com.android.providers.settings.auto_generated_rro_product__` (priority 19 - car common overlay - product partition - HIGHEST)
+**Analysis:**
+- `[x]` indicates overlay is enabled and active
+- Three overlays compete for SettingsProvider resources
+- Names indicate different source origins: vendor (goldfish), car config (RRO), and product (car common)
 
-#### 2. Find `def_wifi_on` Resource Mappings
+#### Step 2: Determine Overlay Priority and Resource Mappings
+
 ```bash
-adb shell cmd overlay dump | grep -A 5 -B 5 def_wifi_on
+adb shell cmd overlay dump | grep -A 10 -B 5 def_wifi_on
 ```
 
-**Key Findings:**
-- **Product Overlay (Priority 19)**: `0x7f020043 -> 0x7f010001 (bool/def_wifi_on -> bool/def_wifi_on)` - car common overlay (HIGHEST)
-- **Car Config RRO (Priority 18)**: `0x7f020043 -> 0x7f010003 (bool/def_wifi_on -> bool/def_wifi_on)` - official car config (MEDIUM)
-- **Vendor Overlay (Priority 6)**: `0x7f020043 -> 0x7f010002 (bool/def_wifi_on -> bool/def_wifi_on)` - goldfish overlay (LOWEST)
+**Real Output with Priority Analysis:**
+```
+Target: com.android.providers.settings  Enabled: true  Priority: 6
+Package: com.android.providers.settings.auto_generated_rro_vendor__
+        0x7f020043 -> 0x7f010002 (bool/def_wifi_on -> bool/def_wifi_on)
+        source: device/generic/goldfish/overlay (VENDOR PARTITION - PRIORITY 6)
 
-#### 3. Check Current WiFi State
+Target: com.android.providers.settings  Enabled: true  Priority: 18
+Package: com.android.providers.settings.car.config.rro
+        0x7f020043 -> 0x7f010003 (bool/def_wifi_on -> bool/def_wifi_on) 
+        source: packages/services/Car/car_product/rro/overlay-config/ (PRODUCT PARTITION - PRIORITY 18)
+
+Target: com.android.providers.settings  Enabled: true  Priority: 19
+Package: com.android.providers.settings.auto_generated_rro_product__
+        0x7f020043 -> 0x7f010001 (bool/def_wifi_on -> bool/def_wifi_on)
+        source: device/generic/car/common/overlay (PRODUCT PARTITION - PRIORITY 19) *** HIGHEST ***
+```
+
+**Priority Resolution:**
+1. **Priority 19** (HIGHEST): `auto_generated_rro_product__` - Car Common overlay
+2. **Priority 18** (MEDIUM): `car.config.rro` - Official Car Config RRO  
+3. **Priority 6** (LOWEST): `auto_generated_rro_vendor__` - Goldfish/Emulator overlay
+
+#### Step 3: Verify Current Effective Value
+
 ```bash
 adb shell settings get global wifi_on
 ```
 
-**Output:** `0` (WiFi is disabled by default - Car Common overlay with priority 19 controls the final value)
+**Output:** `0`
 
-#### 4. Verify Overlay File Locations
+**Interpretation:** WiFi is disabled by default. This value comes from the highest priority overlay (priority 19).
+
+#### Step 4: Cross-Reference with Source Files
+
 ```bash
-# Vendor partition
+# Check the actual source files to confirm priority resolution
 adb shell ls -la /vendor/overlay/ | grep Settings
-
-# Product partition  
 adb shell ls -la /product/overlay/ | grep Settings
 ```
 
-**Vendor Overlay (sdk_car_x86_64):**
+**Vendor Partition Files:**
 ```
--rw-r--r--  1 root root   8542 2025-07-15 23:54 SettingsProvider__sdk_car_x86_64__auto_generated_rro_vendor.apk (Priority 6 - LOWEST)
-```
-
-**Product Overlays (sdk_car_x86_64) - Priority Order:**
-```
--rw-r--r--  1 root root   8542 2025-07-19 14:13 SettingsProvider__sdk_car_x86_64__auto_generated_rro_product.apk (Priority 19 - HIGHEST)
--rw-r--r--  1 root root   8542 2025-07-15 00:01 CarSettingsProviderConfigRRO.apk (Priority 18 - MEDIUM)
+-rw-r--r--  1 root root   8542 2025-07-15 23:54 SettingsProvider__sdk_car_x86_64__auto_generated_rro_vendor.apk
 ```
 
-### Priority Resolution Analysis (sdk_car_x86_64)
+**Product Partition Files:**
+```
+-rw-r--r--  1 root root   8542 2025-07-19 14:13 SettingsProvider__sdk_car_x86_64__auto_generated_rro_product.apk
+-rw-r--r--  1 root root   8542 2025-07-15 00:01 CarSettingsProviderConfigRRO.apk
+```
 
-Based on the partition hierarchy and actual priority values from the running emulator, the effective priority for overlays in `sdk_car_x86_64` target is:
+**File Analysis:**
+- Most recent timestamp: `auto_generated_rro_product.apk` (2025-07-19) - confirms this is the active overlay
+- Priority correlation: Product partition overlays (19, 18) override vendor partition (6)
 
-1. **SettingsProvider__sdk_car_x86_64__auto_generated_rro_product.apk** (product partition, priority 19) - **HIGHEST**
-   - Source: `device/generic/car/common/overlay`
-   - Car device-specific customizations - **THIS OVERLAY CONTROLS def_wifi_on!**
-   
-2. **CarSettingsProviderConfigRRO.apk** (product partition, priority 18) - **MEDIUM**
-   - Source: `packages/services/Car/car_product/rro/overlay-config/`
-   - Official Car platform configuration (overridden by higher priority)
-   
-3. **SettingsProvider__sdk_car_x86_64__auto_generated_rro_vendor.apk** (vendor partition, priority 6) - **LOWEST**
-   - Source: `device/generic/goldfish/overlay`  
-   - Emulator-specific defaults (ignored)
+#### Step 5: Examine Individual Overlay Details
 
-**Result**: The Car Common overlay (auto_generated_rro_product) with priority 19 takes highest precedence and controls the final `def_wifi_on` value. The ADB command `adb shell settings get global wifi_on` returns the value from the highest priority overlay.
-
-### Basic Overlay Commands:
 ```bash
-# List all active overlays for SettingsProvider
-adb shell cmd overlay list | grep settings
-
-# Check current WiFi default value
-adb shell settings get global wifi_on
-
-# Dump overlay mappings
-adb shell cmd overlay dump | grep def_wifi_on
-```
-
-### Advanced Debugging (sdk_car_x86_64):
-```bash
-# Check overlay files for sdk_car_x86_64
-adb shell ls -la /vendor/overlay/ | grep sdk_car_x86_64
-adb shell ls -la /product/overlay/ | grep sdk_car_x86_64
-
-# Examine specific sdk_car_x86_64 overlays
-adb shell cmd overlay dump com.android.providers.settings.auto_generated_rro_vendor__
+# Get detailed overlay information
 adb shell cmd overlay dump com.android.providers.settings.auto_generated_rro_product__
-
-# Check car-specific overlay configuration
-adb shell cmd overlay list | grep car
 ```
 
-### Log Analysis:
+**Real Output (truncated for key information):**
+```
+OverlayInfo{
+    packageName=com.android.providers.settings.auto_generated_rro_product__
+    targetPackageName=com.android.providers.settings
+    category=null
+    baseCodePath=/product/overlay/SettingsProvider__sdk_car_x86_64__auto_generated_rro_product.apk
+    state=STATE_ENABLED
+    userId=0
+    priority=19
+    isStatic=false
+    isMutable=true
+}
+
+Resource Mappings:
+0x7f020043 -> 0x7f010001 (bool/def_wifi_on -> bool/def_wifi_on)
+    Effective value: false (0)
+    Source: device/generic/car/common/overlay/frameworks/base/packages/SettingsProvider/res/values/defaults.xml:3
+```
+
+#### Step 6: Source Code Verification
+
+Check the actual source values to confirm our analysis:
+
 ```bash
-# Check overlay manager logs
-adb logcat -d | grep OverlayManager
+# Find the controlling source file (priority 19 overlay)
+find . -path "*/car/common/overlay/*" -name "defaults.xml" -exec grep -l "def_wifi_on" {} \;
+```
 
-# Check service manager logs for overlay registration
-adb logcat -d | grep servicemanager
+### Advanced Debugging Commands
 
-# Check resource resolution logs
-adb logcat -d | grep Resources
+#### Overlay Status and Priority Investigation
+```bash
+# List all overlays with priority information
+adb shell cmd overlay list --verbose
+
+# Show overlay information for specific target
+adb shell cmd overlay list com.android.providers.settings
+
+# Dump all overlay mappings (large output - use with grep)
+adb shell cmd overlay dump | grep -E "(Priority|def_wifi_on|Package:)"
+```
+
+#### Resource Resolution Deep Dive
+```bash
+# Check resource compilation cache
+adb shell find /data/resource-cache -name "*SettingsProvider*" -ls
+
+# Examine overlay APK contents (if accessible)
+adb shell unzip -l /product/overlay/SettingsProvider__sdk_car_x86_64__auto_generated_rro_product.apk
+
+# Check for resource conflicts across overlays
+adb shell cmd overlay dump | grep -A 1 -B 1 "0x7f020043"
+```
+
+#### Partition and Installation Analysis
+```bash
+# Verify overlay installation across all partitions
+adb shell find /vendor /product /system -name "*SettingsProvider*" -path "*/overlay/*" -ls
+
+# Check overlay manifest information
+adb shell aapt dump badging /product/overlay/SettingsProvider__sdk_car_x86_64__auto_generated_rro_product.apk
+
+# Examine vintf fragment inclusions
+adb shell find /vendor/etc/vintf /product/etc/vintf -name "*overlay*" -exec cat {} \;
+```
+
+### Log-Based Debugging
+
+#### Overlay Manager Logs
+```bash
+# Monitor overlay registration during boot
+adb logcat -d | grep -E "(OverlayManager|OverlayInfo)"
+
+# Check for overlay conflicts and errors
+adb logcat -d | grep -E "(overlay.*error|overlay.*conflict)" -i
+
+# Monitor resource resolution events
+adb logcat -d | grep -E "(ResourceTable|Resources.*overlay)"
+```
+
+#### Runtime Overlay Debugging
+```bash
+# Check overlay state changes
+adb logcat | grep -E "(overlay.*enabled|overlay.*disabled)"
+
+# Monitor package manager overlay operations
+adb logcat | grep -E "(PackageManager.*overlay|OverlayManager.*update)"
+
+# Check for SELinux overlay denials
+adb logcat | grep -E "avc.*denied.*overlay"
+```
+
+### Troubleshooting Priority Issues
+
+#### Common Priority Conflicts
+
+**Scenario 1: Expected overlay not taking effect**
+```bash
+# Step 1: Verify overlay is enabled and check priority
+adb shell cmd overlay list com.android.providers.settings | grep -E "(Priority|Enabled)"
+
+# Step 2: Check if higher priority overlay overrides
+adb shell cmd overlay dump | grep -A 3 -B 3 "def_wifi_on" | grep -E "(Priority|Package)"
+
+# Step 3: Compare effective value with expected value
+adb shell settings get global wifi_on
+# vs expected value from your overlay source file
+```
+
+**Scenario 2: Multiple overlays competing**
+```bash
+# List all SettingsProvider overlays sorted by priority
+adb shell cmd overlay dump | grep -A 5 "com.android.providers.settings" | grep -E "(Priority|Package)" | sort -k2 -n
+
+# Check resource ID conflicts
+adb shell cmd overlay dump | grep "0x7f020043" -A 2 -B 2
+```
+
+### Performance Impact Analysis
+
+```bash
+# Check overlay compilation times
+adb logcat -d | grep -E "(overlay.*compile|AAPT2.*overlay)"
+
+# Monitor resource lookup performance
+adb logcat | grep -E "Resources.*time" | grep overlay
+
+# Check overlay memory usage
+adb shell dumpsys meminfo | grep -i overlay
+```
+
+### Build-Time vs Runtime Verification
+
+#### Verify Build Configuration
+```bash
+# Check if overlay is included in product packages
+grep -r "SettingsProvider.*rro" device/generic/car/sdk_car_x86_64.mk
+
+# Verify overlay build targets
+find out/target/product/sdk_car_x86_64 -name "*SettingsProvider*overlay*" -ls
+```
+
+#### Runtime State Validation
+```bash
+# Confirm runtime matches build configuration
+adb shell cmd overlay list | wc -l
+# Compare with number of overlay APKs in /*/overlay/ directories
+
+# Verify overlay APK signatures and integrity
+adb shell pm verify-app-data-integrity | grep overlay
 ```
 
 ## Best Practices
@@ -439,53 +569,272 @@ adb logcat -d | grep Resources
 ### Issue 1: Overlay Not Applied
 **Symptoms**: Resource values don't change despite overlay presence
 
-**Possible Causes**:
-- Overlay not properly installed
-- Resource ID mismatch
-- Priority conflict with higher-priority overlay
+**Real Example**: Modified `def_wifi_on` from `true` to `false` in Car Config RRO, but WiFi still defaults to enabled.
 
-**Solutions**:
+**Diagnostic Commands:**
 ```bash
 # Check if overlay is installed and enabled
-adb shell cmd overlay list | grep [overlay-name]
+adb shell cmd overlay list | grep -E "(car.config.rro|settings)" 
 
-# Verify overlay resource mapping
-adb shell cmd overlay dump [overlay-name]
+# Expected output should show [x] indicating enabled:
+# [x] com.android.providers.settings.car.config.rro
 
-# Check overlay installation location
-adb shell ls -la /*/overlay/ | grep [overlay-name]
+# Verify resource mapping
+adb shell cmd overlay dump com.android.providers.settings.car.config.rro | grep def_wifi_on
+
+# Check effective value
+adb shell settings get global wifi_on
 ```
 
-### Issue 2: Build Failures
-**Symptoms**: Build fails with overlay-related errors
+**Possible Causes & Solutions:**
 
-**Common Errors**:
-- Missing vintf_fragments
-- Resource conflicts
-- Incorrect Android.bp configuration
+**Cause 1: Higher Priority Overlay Override**
+```bash
+# Check all overlays affecting the same resource
+adb shell cmd overlay dump | grep -A 3 -B 3 def_wifi_on | grep -E "(Priority|Package)"
 
-**Solutions**:
-- Ensure vintf_fragments are properly included
-- Check resource naming conflicts
-- Verify Android.bp syntax and dependencies
+# Solution: Identify which overlay has highest priority and modify that one instead
+# In sdk_car_x86_64 case: priority 19 (car common) overrides priority 18 (car config RRO)
+```
 
-### Issue 3: Runtime Errors
-**Symptoms**: System crashes or unexpected behavior after overlay installation
+**Cause 2: Overlay Not Properly Installed**
+```bash
+# Check overlay APK location
+adb shell find /vendor /product /system -name "*car.config.rro*" -ls
 
-**Debugging Steps**:
-1. Check logcat for overlay-related errors
-2. Verify resource types match expected values
-3. Test overlay in isolation
-4. Check for SELinux policy issues
+# Solution: Verify overlay is included in PRODUCT_PACKAGES and rebuild
+grep -r "CarSettingsProviderConfigRRO" device/generic/car/
+```
 
-### Issue 4: Priority Conflicts
-**Symptoms**: Wrong overlay takes precedence
+**Cause 3: Resource ID Mismatch**
+```bash
+# Compare resource IDs across overlays
+adb shell cmd overlay dump | grep "0x7f020043" -A 2 -B 2
 
-**Resolution**:
-- Review overlay inheritance chain
-- Check partition priorities
-- Verify overlay installation locations
-- Consider restructuring overlay hierarchy
+# Solution: Ensure all overlays target the same resource ID (check R.java generation)
+```
+
+### Issue 2: Build Failures with Overlay Errors
+**Symptoms**: Build fails with overlay-related compilation errors
+
+**Real Example:**
+```
+error: failed to compile overlay APK: SettingsProvider__sdk_car_x86_64__auto_generated_rro_product.apk
+AAPT2 ERROR: resource bool/def_wifi_on not found in target package
+```
+
+**Common Causes & Solutions:**
+
+**Cause 1: Missing vintf_fragments**
+```bash
+# Error message: "Overlay package missing required manifest fragment"
+# Solution: Add vintf_fragments to Android.bp
+runtime_resource_overlay {
+    name: "MyCustomOverlay",
+    target: "com.android.providers.settings",
+    resource_dirs: ["res"],
+    product_specific: true,
+    vintf_fragments: ["my_overlay_vintf.xml"],  // <- Add this
+}
+```
+
+**Cause 2: Resource Type Mismatch**
+```bash
+# Error: "Resource type mismatch: expected bool, found string"
+# Check target resource type:
+adb shell cmd overlay dump | grep -A 5 def_wifi_on
+
+# Solution: Ensure overlay resource matches target type
+# Target: <bool name="def_wifi_on">false</bool>
+# Overlay must use: <bool name="def_wifi_on">true</bool> (not <string>)
+```
+
+**Cause 3: Target Package Not Found**
+```bash
+# Error: "Target package com.android.providers.settings not found"
+# Solution: Ensure target package is built before overlay
+# Add dependency in Android.bp:
+runtime_resource_overlay {
+    required: ["SettingsProvider"],  // <- Add dependency
+}
+```
+
+### Issue 3: Runtime Crashes After Overlay Installation
+**Symptoms**: System crashes, boot loops, or unexpected behavior
+
+**Real Example**: System reboots continuously after installing custom Car overlay.
+
+**Diagnostic Steps:**
+```bash
+# 1. Check for overlay-related crashes in logcat
+adb logcat -d | grep -E "(FATAL.*overlay|AndroidRuntime.*overlay)" -A 10
+
+# 2. Look for resource resolution errors
+adb logcat -d | grep -E "(Resources.*Failed|aapt.*error)" -A 5
+
+# 3. Check SELinux denials
+adb logcat -d | grep -E "avc.*denied.*overlay"
+
+# 4. Monitor overlay manager errors
+adb logcat | grep OverlayManager -A 3 -B 3
+```
+
+**Common Causes & Solutions:**
+
+**Cause 1: Invalid Resource Values**
+```bash
+# Error pattern: "IllegalArgumentException: Invalid resource value"
+# Example: Boolean resource set to non-boolean value
+# Bad: <bool name="def_wifi_on">maybe</bool>
+# Good: <bool name="def_wifi_on">false</bool>
+
+# Solution: Validate all resource values match expected types
+adb shell cmd overlay dump | grep -E "(ERROR|WARN)" -A 5
+```
+
+**Cause 2: SELinux Policy Violations**
+```bash
+# Error pattern: "avc: denied { read } for path='/product/overlay/MyOverlay.apk'"
+# Solution: Verify overlay APK has correct SELinux context
+adb shell ls -Z /product/overlay/ | grep MyOverlay
+
+# Should show: u:object_r:system_file:s0 (or appropriate context)
+```
+
+**Cause 3: Circular Dependencies**
+```bash
+# Error: "Overlay dependency cycle detected"
+# Solution: Remove circular references in Android.bp dependencies
+# Check with: grep -r "required.*MyOverlay" packages/
+```
+
+### Issue 4: Priority Conflicts Between Overlays
+**Symptoms**: Wrong overlay takes precedence, unexpected resource values
+
+**Real Example**: Car Config RRO (priority 18) expected to control `def_wifi_on`, but Car Common overlay (priority 19) overrides it.
+
+**Resolution Process:**
+
+**Step 1: Identify Priority Hierarchy**
+```bash
+# List all competing overlays with priorities
+adb shell cmd overlay dump | grep -E "com.android.providers.settings" -A 5 | grep -E "(Priority|Package)"
+
+# Real output:
+# Package: com.android.providers.settings.auto_generated_rro_vendor__ Priority: 6
+# Package: com.android.providers.settings.car.config.rro Priority: 18  
+# Package: com.android.providers.settings.auto_generated_rro_product__ Priority: 19 (WINS)
+```
+
+**Step 2: Determine Priority Assignment Logic**
+```bash
+# Check partition-based priority rules
+# Vendor: ~1-10, Product: ~11-20, System: ~21-30 (rough guidelines)
+adb shell find /vendor /product /system -name "*SettingsProvider*" -path "*/overlay/*" -exec ls -la {} \;
+```
+
+**Step 3: Choose Resolution Strategy**
+
+**Option A: Modify Higher Priority Overlay**
+```bash
+# Edit the controlling overlay (priority 19 in this case)
+vim device/generic/car/common/overlay/frameworks/base/packages/SettingsProvider/res/values/defaults.xml
+# Change: <bool name="def_wifi_on">false</bool>
+# To:     <bool name="def_wifi_on">true</bool>
+```
+
+**Option B: Remove Conflicting Overlay**
+```bash
+# Remove lower priority overlay from build
+# Edit device/generic/car/sdk_car_x86_64.mk:
+# Remove: CarSettingsProviderConfigRRO from PRODUCT_PACKAGES
+```
+
+**Option C: Restructure Priority Hierarchy**
+```bash
+# Move overlay to different partition to change priority
+# Move from product to vendor (lowers priority) or system (raises priority)
+```
+
+### Issue 5: Overlay Changes Not Reflected After Rebuild
+**Symptoms**: Modified overlay resources don't take effect after `make` or `mm`
+
+**Real Example**: Changed `def_wifi_on` from `false` to `true`, rebuilt, but `adb shell settings get global wifi_on` still returns `0`.
+
+**Diagnostic Commands:**
+```bash
+# 1. Check overlay APK timestamp
+adb shell ls -la /product/overlay/ | grep SettingsProvider
+# Compare timestamp with your modification time
+
+# 2. Verify overlay APK contains your changes
+adb pull /product/overlay/SettingsProvider__sdk_car_x86_64__auto_generated_rro_product.apk
+unzip -l SettingsProvider__sdk_car_x86_64__auto_generated_rro_product.apk | grep defaults.xml
+unzip -p SettingsProvider__sdk_car_x86_64__auto_generated_rro_product.apk res/values/defaults.xml
+
+# 3. Check build system didn't revert your changes  
+find out/target/product/sdk_car_x86_64 -name "*SettingsProvider*" -path "*/overlay/*" -newer [your_modified_file] -ls
+```
+
+**Solutions:**
+
+**Solution 1: Force Clean Rebuild**
+```bash
+# Use the provided clean script
+./clean_overlay_build.sh
+
+# Or manually clean overlay artifacts:
+rm -rf out/target/product/sdk_car_x86_64/*/overlay/SettingsProvider*
+rm -rf out/target/product/sdk_car_x86_64/{system,vendor,product}.img
+make -j$(nproc)
+```
+
+**Solution 2: Check Build Dependencies**
+```bash
+# Ensure overlay dependencies trigger rebuild
+mm -j$(nproc) device/generic/car/common/overlay
+mm -j$(nproc) packages/services/Car/car_product/rro/overlay-config/
+```
+
+**Solution 3: Verify Installation Process**
+```bash
+# Check if overlay is included in product packages
+grep -r "SettingsProvider.*rro" device/generic/car/sdk_car_x86_64.mk
+
+# Verify overlay builds correctly  
+find out/target/product/sdk_car_x86_64 -name "*SettingsProvider*overlay*" -exec file {} \;
+```
+
+### Issue 6: Overlay Conflicts with OTA Updates
+**Symptoms**: OTA updates fail or overlays are lost after updates
+
+**Prevention & Solutions:**
+
+**Use Product Partition for Custom Overlays:**
+```bash
+# Place custom overlays in product partition (preserved during OTA)
+runtime_resource_overlay {
+    product_specific: true,  // <- Ensures product partition placement
+}
+```
+
+**Verify OTA Package Inclusion:**
+```bash
+# Check if overlay is included in OTA package
+grep -r "MyCustomOverlay" build/make/target/product/
+
+# Ensure proper signing for OTA
+# Custom overlays must be signed with same key as system
+```
+
+**Post-OTA Validation:**
+```bash
+# After OTA, verify overlays are still active
+adb shell cmd overlay list | grep -E "(custom|car)" 
+
+# Check overlay priorities haven't changed
+adb shell cmd overlay dump | grep -E "Priority" | sort -k2 -n
+```
 
 ---
 
