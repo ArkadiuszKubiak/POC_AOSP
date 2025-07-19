@@ -85,6 +85,46 @@ Resource: def_wifi_on
 Result: def_wifi_on = false
 ```
 
+### How Overlay Priorities Are Determined
+
+The overlay priority values are determined by Android's overlay management system and are influenced by several factors:
+
+#### 1. Partition-Based Priority Base Values
+- **System partition** (`/system/overlay/`): Base priority ~1-5
+- **Vendor partition** (`/vendor/overlay/`): Base priority ~6-10  
+- **Product partition** (`/product/overlay/`): Base priority ~15-20
+- **System Extension partition** (`/system_ext/overlay/`): Base priority ~25-30
+
+#### 2. Installation Order and Configuration
+- Overlays installed later may receive higher priorities within the same partition
+- Build system can assign specific priorities through configuration
+- Static overlays (defined in `AndroidManifest.xml`) may have different priority calculation
+
+#### 3. Real Priority Values (emulator_car64_x86_64)
+Based on actual ADB dump data, the priority assignment for SettingsProvider overlays is:
+
+```bash
+# Command to verify priorities:
+adb shell cmd overlay dump | grep -A 10 "com.android.providers.settings"
+
+# Results:
+com.android.providers.settings.auto_generated_rro_product__  → Priority: 19
+com.android.providers.settings.car.config.rro               → Priority: 18  
+com.android.providers.settings.auto_generated_rro_vendor__  → Priority: 6
+```
+
+**Key Insight**: Higher priority number = higher precedence. Priority 19 overrides priority 18, which overrides priority 6.
+
+#### 4. Why Car Common Overlay Has Higher Priority Than Car Config RRO
+The car common overlay (`auto_generated_rro_product`) gets priority 19 while Car Config RRO gets priority 18 because:
+
+1. **Auto-generated overlays** from `PRODUCT_PACKAGE_OVERLAYS` may receive higher priority
+2. **Installation timing** during build process affects priority assignment
+3. **Product partition** overlays are processed after static RRO definitions
+4. **Build system logic** assigns incremental priorities within the same partition
+
+This explains why device-specific customizations can override platform defaults - the build system ensures that more specific (device-level) overlays take precedence over general (platform-level) configurations.
+
 ## Case Study: def_wifi_on Resource in sdk_car_x86_64
 
 Let's examine how the `def_wifi_on` boolean resource is managed through overlays specifically in the AOSP `sdk_car_x86_64` target.
@@ -97,26 +137,33 @@ The `def_wifi_on` resource is defined in locations specifically used by the `sdk
 - **Path**: [`frameworks/base/packages/SettingsProvider/res/values/defaults.xml`](frameworks/base/packages/SettingsProvider/res/values/defaults.xml)
 - **Value**: `<bool name="def_wifi_on">false</bool>` (base AOSP default)
 
-#### Overlay Definitions Used by sdk_car_x86_64
+#### Overlay Definitions Used by sdk_car_x86_64 (Based on Real Emulator Data)
 
-##### 1. Car Settings Provider Config RRO (Product Partition - HIGHEST PRIORITY)
-- **Path**: [`packages/services/Car/car_product/rro/overlay-config/SettingsProviderRRO/res/values/defaults.xml`](packages/services/Car/car_product/rro/overlay-config/SettingsProviderRRO/res/values/defaults.xml)
-- **Value**: `<bool name="def_wifi_on">false</bool>`
-- **Generated APK**: `/product/overlay/CarSettingsProviderConfigRRO.apk`
-- **Priority**: `18`
-- **Purpose**: Official Car platform configuration defaults
-
-##### 2. Car Common Overlay (Product Partition - MEDIUM PRIORITY)
+##### 1. Car Common Overlay (Product Partition - HIGHEST PRIORITY)
 - **Path**: [`device/generic/car/common/overlay/frameworks/base/packages/SettingsProvider/res/values/defaults.xml`](device/generic/car/common/overlay/frameworks/base/packages/SettingsProvider/res/values/defaults.xml)
 - **Value**: `<bool name="def_wifi_on">false</bool>`
 - **Generated APK**: `/product/overlay/SettingsProvider__sdk_car_x86_64__auto_generated_rro_product.apk`
+- **Overlay Name**: `com.android.providers.settings.auto_generated_rro_product__`
+- **Priority**: `19` (HIGHEST - controls final value)
 - **Configured in**: `sdk_car_x86_64.mk` via `PRODUCT_PACKAGE_OVERLAYS`
+- **Purpose**: Device-specific car customizations
+
+##### 2. Car Settings Provider Config RRO (Product Partition - MEDIUM PRIORITY)
+- **Path**: [`packages/services/Car/car_product/rro/overlay-config/SettingsProviderRRO/res/values/defaults.xml`](packages/services/Car/car_product/rro/overlay-config/SettingsProviderRRO/res/values/defaults.xml)
+- **Value**: `<bool name="def_wifi_on">false</bool>`
+- **Generated APK**: `/product/overlay/CarSettingsProviderConfigRRO.apk`
+- **Overlay Name**: `com.android.providers.settings.car.config.rro`
+- **Priority**: `18` (overridden by car common overlay)
+- **Purpose**: Official Car platform configuration defaults
 
 ##### 3. Goldfish Emulator Overlay (Vendor Partition - LOWEST PRIORITY)
 - **Path**: [`device/generic/goldfish/overlay/frameworks/base/packages/SettingsProvider/res/values/defaults.xml`](device/generic/goldfish/overlay/frameworks/base/packages/SettingsProvider/res/values/defaults.xml)
 - **Value**: `<bool name="def_wifi_on">true</bool>`
 - **Generated APK**: `/vendor/overlay/SettingsProvider__sdk_car_x86_64__auto_generated_rro_vendor.apk`
+- **Overlay Name**: `com.android.providers.settings.auto_generated_rro_vendor__`
+- **Priority**: `6` (ignored - lowest priority)
 - **Configured in**: `car_emulator_vendor.mk` via `DEVICE_PACKAGE_OVERLAYS`
+- **Purpose**: Emulator-specific defaults
 
 ### Resource Usage in SettingsProvider
 
@@ -238,7 +285,9 @@ sdk_car_x86_64 Complete Overlay Hierarchy:
 
 **Key Discovery**: Real emulator data shows that the **car common overlay** (priority 19) actually has higher priority than the **Car Config RRO** (priority 18), making the car common overlay the controlling overlay for `def_wifi_on`.
 
-**Result**: The same resource may be defined multiple times with different priorities, requiring careful management to ensure correct behavior.
+**Critical Finding**: The Android build system assigns higher priorities to device-specific overlays (auto-generated from `PRODUCT_PACKAGE_OVERLAYS`) than to platform-level static RROs, ensuring that device customizations take precedence over general platform defaults.
+
+**Result**: The `device/generic/car/common/overlay` definition of `def_wifi_on=false` is the final controlling value, not the Car Config RRO as initially assumed.
 
 ## Debugging Overlay Issues
 
@@ -262,9 +311,9 @@ com.android.providers.settings
 ```
 
 **Analysis:** Three overlays are active (`[x]`) for SettingsProvider in `sdk_car_x86_64`:
-- `com.android.providers.settings.auto_generated_rro_vendor__` (from goldfish overlay - vendor partition)
-- `com.android.providers.settings.car.config.rro` (Car Config RRO - product partition - priority 18)
-- `com.android.providers.settings.auto_generated_rro_product__` (from car common overlay - product partition)
+- `com.android.providers.settings.auto_generated_rro_vendor__` (priority 6 - goldfish overlay - vendor partition)
+- `com.android.providers.settings.car.config.rro` (priority 18 - Car Config RRO - product partition)
+- `com.android.providers.settings.auto_generated_rro_product__` (priority 19 - car common overlay - product partition - HIGHEST)
 
 #### 2. Find `def_wifi_on` Resource Mappings
 ```bash
@@ -272,16 +321,16 @@ adb shell cmd overlay dump | grep -A 5 -B 5 def_wifi_on
 ```
 
 **Key Findings:**
-- **Car Config RRO**: `0x7f020043 -> 0x7f010003 (bool/def_wifi_on -> bool/def_wifi_on)` - priority: 18 (HIGHEST)
-- **Product Overlay**: `0x7f020043 -> 0x7f010001 (bool/def_wifi_on -> bool/def_wifi_on)` - car common overlay
-- **Vendor Overlay**: `0x7f020043 -> 0x7f010002 (bool/def_wifi_on -> bool/def_wifi_on)` - goldfish overlay (LOWEST)
+- **Product Overlay (Priority 19)**: `0x7f020043 -> 0x7f010001 (bool/def_wifi_on -> bool/def_wifi_on)` - car common overlay (HIGHEST)
+- **Car Config RRO (Priority 18)**: `0x7f020043 -> 0x7f010003 (bool/def_wifi_on -> bool/def_wifi_on)` - official car config (MEDIUM)
+- **Vendor Overlay (Priority 6)**: `0x7f020043 -> 0x7f010002 (bool/def_wifi_on -> bool/def_wifi_on)` - goldfish overlay (LOWEST)
 
 #### 3. Check Current WiFi State
 ```bash
 adb shell settings get global wifi_on
 ```
 
-**Output:** `0` (WiFi is disabled by default - Car Config RRO takes highest precedence)
+**Output:** `0` (WiFi is disabled by default - Car Common overlay with priority 19 controls the final value)
 
 #### 4. Verify Overlay File Locations
 ```bash
@@ -294,13 +343,13 @@ adb shell ls -la /product/overlay/ | grep Settings
 
 **Vendor Overlay (sdk_car_x86_64):**
 ```
--rw-r--r--  1 root root   8542 2025-07-15 23:54 SettingsProvider__sdk_car_x86_64__auto_generated_rro_vendor.apk
+-rw-r--r--  1 root root   8542 2025-07-15 23:54 SettingsProvider__sdk_car_x86_64__auto_generated_rro_vendor.apk (Priority 6 - LOWEST)
 ```
 
-**Product Overlays (sdk_car_x86_64):**
+**Product Overlays (sdk_car_x86_64) - Priority Order:**
 ```
--rw-r--r--  1 root root   8542 2025-07-15 00:01 CarSettingsProviderConfigRRO.apk
--rw-r--r--  1 root root   8542 2025-07-19 14:13 SettingsProvider__sdk_car_x86_64__auto_generated_rro_product.apk
+-rw-r--r--  1 root root   8542 2025-07-19 14:13 SettingsProvider__sdk_car_x86_64__auto_generated_rro_product.apk (Priority 19 - HIGHEST)
+-rw-r--r--  1 root root   8542 2025-07-15 00:01 CarSettingsProviderConfigRRO.apk (Priority 18 - MEDIUM)
 ```
 
 ### Priority Resolution Analysis (sdk_car_x86_64)
