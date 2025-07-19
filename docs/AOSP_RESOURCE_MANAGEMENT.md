@@ -15,11 +15,11 @@ This document provides comprehensive information about Android Resource Manageme
 1. [What is Android Resource Management?](#what-is-android-resource-management)
 2. [Runtime Resource Overlays (RROs)](#runtime-resource-overlays-rros)
 3. [RRO Priority System](#rro-priority-system)
-4. [Case Study: def_wifi_on Resource](#case-study-def_wifi_on-resource)
+4. [Case Study: def_wifi_on Resource in sdk_car_x86_64](#case-study-def_wifi_on-resource-in-sdk_car_x86_64)
    - [Resource Usage in SettingsProvider](#resource-usage-in-settingsprovider)
    - [Multiple Overlay Sources](#multiple-overlay-sources-for-def_wifi_on)
    - [Why Multiple Partitions?](#why-multiple-partitions-for-same-overlay)
-   - [Overlay Inheritance Chain](#overlay-inheritance-chain)
+   - [Overlay Inheritance Chain (sdk_car_x86_64)](#overlay-inheritance-chain-sdk_car_x86_64)
 5. [Debugging Overlay Issues](#debugging-overlay-issues)
 6. [Best Practices](#best-practices)
 7. [Common Issues and Solutions](#common-issues-and-solutions)
@@ -83,9 +83,31 @@ Resource: def_wifi_on
 Result: def_wifi_on = false
 ```
 
-## Case Study: def_wifi_on Resource
+## Case Study: def_wifi_on Resource in sdk_car_x86_64
 
-Let's examine how the `def_wifi_on` boolean resource is managed through overlays in AOSP Car SDK targets.
+Let's examine how the `def_wifi_on` boolean resource is managed through overlays specifically in the AOSP `sdk_car_x86_64` target.
+
+### Source Files and Locations (sdk_car_x86_64 Target Only)
+
+The `def_wifi_on` resource is defined in locations specifically used by the `sdk_car_x86_64` target:
+
+#### Original Resource Definition
+- **Path**: [`frameworks/base/packages/SettingsProvider/res/values/defaults.xml`](frameworks/base/packages/SettingsProvider/res/values/defaults.xml)
+- **Value**: `<bool name="def_wifi_on">false</bool>` (base AOSP default)
+
+#### Overlay Definitions Used by sdk_car_x86_64
+
+##### 1. Car Common Overlay (Product Partition - HIGHEST PRIORITY)
+- **Path**: [`device/generic/car/common/overlay/frameworks/base/packages/SettingsProvider/res/values/defaults.xml`](device/generic/car/common/overlay/frameworks/base/packages/SettingsProvider/res/values/defaults.xml)
+- **Value**: `<bool name="def_wifi_on">false</bool>`
+- **Generated APK**: `/product/overlay/SettingsProvider__sdk_car_x86_64__auto_generated_rro_product.apk`
+- **Configured in**: `sdk_car_x86_64.mk` via `PRODUCT_PACKAGE_OVERLAYS`
+
+##### 2. Goldfish Emulator Overlay (Vendor Partition - LOWEST PRIORITY)
+- **Path**: [`device/generic/goldfish/overlay/frameworks/base/packages/SettingsProvider/res/values/defaults.xml`](device/generic/goldfish/overlay/frameworks/base/packages/SettingsProvider/res/values/defaults.xml)
+- **Value**: `<bool name="def_wifi_on">true</bool>`
+- **Generated APK**: `/vendor/overlay/SettingsProvider__sdk_car_x86_64__auto_generated_rro_vendor.apk`
+- **Configured in**: `car_emulator_vendor.mk` via `DEVICE_PACKAGE_OVERLAYS`
 
 ### Resource Usage in SettingsProvider
 
@@ -160,28 +182,37 @@ The Android build system automatically generates overlay APKs for different part
 - Provides redundancy for critical system resources
 - Improves system reliability and recovery capabilities
 
-### Example from Car SDK Configuration:
-- **Source**: `device/generic/car/common/overlay`
-- **Generated Overlays**:
-  - `/vendor/overlay/SettingsProvider__sdk_car_x86_64__auto_generated_rro_vendor.apk`
-  - `/product/overlay/SettingsProvider__sdk_car_x86_64__auto_generated_rro_product.apk`
+### Example from sdk_car_x86_64 Configuration:
+The build system automatically generates overlay APKs from the following sources:
+- **Car Common Source**: `device/generic/car/common/overlay`
+  - **Generated Product Overlay**: `/product/overlay/SettingsProvider__sdk_car_x86_64__auto_generated_rro_product.apk`
+- **Goldfish Source**: `device/generic/goldfish/overlay`  
+  - **Generated Vendor Overlay**: `/vendor/overlay/SettingsProvider__sdk_car_x86_64__auto_generated_rro_vendor.apk`
 
-### Overlay Inheritance Chain
+### Overlay Inheritance Chain (sdk_car_x86_64)
 
-The `sdk_car_x86_64` target inherits overlays from multiple sources:
+The `sdk_car_x86_64` target inherits overlays from multiple sources in the following order:
 
 ```makefile
-# sdk_car_x86_64.mk inherits from:
-$(call inherit-product, device/generic/car/sdk_car_x86_64.mk)   # Base car overlays
+# sdk_car_x86_64.mk configuration:
+PRODUCT_PACKAGE_OVERLAYS := device/generic/car/common/overlay
+
+# Inherited from device/generic/goldfish/board/emu64x/details.mk
+# → car_emulator_vendor.mk
+# → DEVICE_PACKAGE_OVERLAYS := device/generic/goldfish/overlay
 ```
 
-This creates an overlay hierarchy:
+This creates the following overlay hierarchy for SettingsProvider:
 
 ```
-Inheritance Chain:
-sdk_car_x86_64
-└── sdk_car_x86_64.mk
-    └── PRODUCT_PACKAGE_OVERLAYS := device/generic/car/common/overlay
+sdk_car_x86_64 Target Overlays:
+├── Product Partition (HIGHEST PRIORITY)
+│   └── device/generic/car/common/overlay/frameworks/base/packages/SettingsProvider/
+│       └── def_wifi_on = false ✓ APPLIED
+│
+└── Vendor Partition (LOWEST PRIORITY)
+    └── device/generic/goldfish/overlay/frameworks/base/packages/SettingsProvider/
+        └── def_wifi_on = true (IGNORED - lower priority)
 ```
 
 **Result**: The same resource may be defined multiple times with different priorities, requiring careful management to ensure correct behavior.
@@ -189,6 +220,75 @@ sdk_car_x86_64
 ## Debugging Overlay Issues
 
 When working with overlays, use these ADB commands to debug overlay behavior:
+
+### Real-World Example: Debugging `def_wifi_on` on `sdk_car_x86_64`
+
+Based on actual emulator analysis, here are the commands and their outputs:
+
+#### 1. List Active SettingsProvider Overlays
+```bash
+adb shell cmd overlay list | grep -i settings
+```
+
+**Output (sdk_car_x86_64 specific):**
+```
+com.android.providers.settings
+[x] com.android.providers.settings.auto_generated_rro_vendor__
+[x] com.android.providers.settings.auto_generated_rro_product__
+```
+
+**Analysis:** Two overlays are active (`[x]`) for SettingsProvider in `sdk_car_x86_64`:
+- `com.android.providers.settings.auto_generated_rro_vendor__` (from goldfish overlay - vendor partition)
+- `com.android.providers.settings.auto_generated_rro_product__` (from car common overlay - product partition)
+
+#### 2. Find `def_wifi_on` Resource Mappings
+```bash
+adb shell cmd overlay dump | grep -A 5 -B 5 def_wifi_on
+```
+
+**Key Findings:**
+- **Product Overlay**: `0x7f020043 -> 0x7f010000 (bool/def_wifi_on -> bool/def_wifi_on)` - value: `false`
+- **Vendor Overlay**: `0x7f020043 -> 0x7f010002 (bool/def_wifi_on -> bool/def_wifi_on)` - value: `true` (ignored)
+
+#### 3. Check Current WiFi State
+```bash
+adb shell settings get global wifi_on
+```
+
+**Output:** `0` (WiFi is disabled by default - product overlay takes precedence)
+
+#### 4. Verify Overlay File Locations
+```bash
+# Vendor partition
+adb shell ls -la /vendor/overlay/ | grep Settings
+
+# Product partition  
+adb shell ls -la /product/overlay/ | grep Settings
+```
+
+**Vendor Overlay (sdk_car_x86_64):**
+```
+-rw-r--r--  1 root root   8542 2025-07-15 23:54 SettingsProvider__sdk_car_x86_64__auto_generated_rro_vendor.apk
+```
+
+**Product Overlays (sdk_car_x86_64):**
+```
+-rw-r--r--  1 root root   8542 2025-07-19 14:13 SettingsProvider__sdk_car_x86_64__auto_generated_rro_product.apk
+```
+
+### Priority Resolution Analysis (sdk_car_x86_64)
+
+Based on the partition hierarchy (system < vendor < odm < oem < product < system_ext), the effective priority for overlays in `sdk_car_x86_64` target is:
+
+1. **SettingsProvider__sdk_car_x86_64__auto_generated_rro_product.apk** (product partition) - **HIGHEST**
+   - Source: `device/generic/car/common/overlay`
+   - Sets `def_wifi_on` to `false`
+   
+2. **SettingsProvider__sdk_car_x86_64__auto_generated_rro_vendor.apk** (vendor partition) - **LOWEST**
+   - Source: `device/generic/goldfish/overlay`  
+   - Sets `def_wifi_on` to `true` (but ignored due to lower priority)
+
+**Result**: The product overlay from car common takes precedence and sets `def_wifi_on` to `false`, which explains why `adb shell settings get global wifi_on` returns `0`.
 
 ### Basic Overlay Commands:
 ```bash
@@ -202,18 +302,18 @@ adb shell settings get global wifi_on
 adb shell cmd overlay dump | grep def_wifi_on
 ```
 
-### Advanced Debugging:
+### Advanced Debugging (sdk_car_x86_64):
 ```bash
-# Check overlay files in different partitions
-adb shell ls -la /vendor/overlay/ | grep Settings
-adb shell ls -la /product/overlay/ | grep Settings
+# Check overlay files for sdk_car_x86_64
+adb shell ls -la /vendor/overlay/ | grep sdk_car_x86_64
+adb shell ls -la /product/overlay/ | grep sdk_car_x86_64
 
-# Examine specific overlay details
+# Examine specific sdk_car_x86_64 overlays
 adb shell cmd overlay dump com.android.providers.settings.auto_generated_rro_vendor__
-adb shell cmd overlay dump com.android.providers.settings.car.config.rro
+adb shell cmd overlay dump com.android.providers.settings.auto_generated_rro_product__
 
-# Check overlay service status
-adb shell service check vendor.brcm.helloworld.IHelloWorld/default
+# Check car-specific overlay configuration
+adb shell cmd overlay list | grep car
 ```
 
 ### Log Analysis:
@@ -309,4 +409,22 @@ adb shell ls -la /*/overlay/ | grep [overlay-name]
 
 ---
 
-*This document provides comprehensive coverage of Android Resource Management and RRO systems. For implementation examples and practical applications, refer to the AOSP Car SDK Target documentation.*
+## Summary
+
+This document focuses specifically on Android Resource Management and Runtime Resource Overlays (RROs) as they apply to the `sdk_car_x86_64` target in AOSP. The documentation has been filtered to include only:
+
+### Overlays Used by sdk_car_x86_64:
+1. **Product Partition**: `device/generic/car/common/overlay` (highest priority)
+2. **Vendor Partition**: `device/generic/goldfish/overlay` (lowest priority)
+
+### Key Resources Covered:
+- **SettingsProvider overlays**: `def_wifi_on` resource management
+- **Partition hierarchy**: Product overlay takes precedence over vendor overlay
+- **Build configuration**: PRODUCT_PACKAGE_OVERLAYS and DEVICE_PACKAGE_OVERLAYS
+
+### Excluded from This Documentation:
+- Overlays not used by `sdk_car_x86_64` (e.g., tablet, wear, other device-specific overlays)
+- Other target configurations (e.g., `sdk_car_arm64`, `aosp_car_emulator`)
+- Third-party OEM overlays not relevant to AOSP Car SDK
+
+*This focused documentation provides targeted coverage of RRO systems for the `sdk_car_x86_64` target. For broader AOSP overlay documentation, refer to the general Android resource management guides.*
