@@ -137,24 +137,25 @@ private void loadBooleanSetting(SQLiteStatement stmt, String key, int resid) {
 
 ### Multiple Overlay Sources for `def_wifi_on`
 
-In `sdk_car_x86_64` target configuration, `def_wifi_on` is defined in multiple overlay sources:
+In `sdk_car_x86_64` target configuration, `def_wifi_on` is actually defined in **THREE** active overlay sources:
 
-#### 1. Car Product RRO (High Priority)
+#### 1. Car Settings Provider Config RRO (Product Partition - HIGHEST PRIORITY)
 - **Path**: `packages/services/Car/car_product/rro/overlay-config/SettingsProviderRRO/res/values/defaults.xml`
-- **Value**: `<bool name="def_wifi_on">false</bool>`
-- **Partition**: `/product/overlay/CarSettingsProviderConfigRRO.apk`
-- **Purpose**: Official Car platform defaults
+- **Generated APK**: `/product/overlay/CarSettingsProviderConfigRRO.apk`
+- **Overlay Name**: `com.android.providers.settings.car.config.rro`
+- **Priority**: `18`
+- **Purpose**: Official Car platform configuration defaults
 
-#### 2. Custom Car Common Overlay
+#### 2. Car Common Overlay (Product Partition - MEDIUM PRIORITY)
 - **Path**: `device/generic/car/common/overlay/frameworks/base/packages/SettingsProvider/res/values/defaults.xml`
-- **Value**: `<bool name="def_wifi_on">false</bool>`
-- **Partitions**: Generates overlays in multiple partitions
-- **Purpose**: Device-specific customizations
+- **Generated APK**: `/product/overlay/SettingsProvider__sdk_car_x86_64__auto_generated_rro_product.apk`
+- **Overlay Name**: `com.android.providers.settings.auto_generated_rro_product__`
+- **Purpose**: Device-specific car customizations
 
-#### 3. Goldfish Emulator Overlay (Lower Priority)
+#### 3. Goldfish Emulator Overlay (Vendor Partition - LOWEST PRIORITY)
 - **Path**: `device/generic/goldfish/overlay/frameworks/base/packages/SettingsProvider/res/values/defaults.xml`
-- **Value**: `<bool name="def_wifi_on">true</bool>`
-- **Partition**: `/vendor/overlay/`
+- **Generated APK**: `/vendor/overlay/SettingsProvider__sdk_car_x86_64__auto_generated_rro_vendor.apk`
+- **Overlay Name**: `com.android.providers.settings.auto_generated_rro_vendor__`
 - **Purpose**: Emulator-specific defaults
 
 ### Why Multiple Partitions for Same Overlay?
@@ -234,11 +235,13 @@ adb shell cmd overlay list | grep -i settings
 ```
 com.android.providers.settings
 [x] com.android.providers.settings.auto_generated_rro_vendor__
+[x] com.android.providers.settings.car.config.rro
 [x] com.android.providers.settings.auto_generated_rro_product__
 ```
 
-**Analysis:** Two overlays are active (`[x]`) for SettingsProvider in `sdk_car_x86_64`:
+**Analysis:** Three overlays are active (`[x]`) for SettingsProvider in `sdk_car_x86_64`:
 - `com.android.providers.settings.auto_generated_rro_vendor__` (from goldfish overlay - vendor partition)
+- `com.android.providers.settings.car.config.rro` (Car Config RRO - product partition - priority 18)
 - `com.android.providers.settings.auto_generated_rro_product__` (from car common overlay - product partition)
 
 #### 2. Find `def_wifi_on` Resource Mappings
@@ -247,15 +250,16 @@ adb shell cmd overlay dump | grep -A 5 -B 5 def_wifi_on
 ```
 
 **Key Findings:**
-- **Product Overlay**: `0x7f020043 -> 0x7f010000 (bool/def_wifi_on -> bool/def_wifi_on)` - value: `false`
-- **Vendor Overlay**: `0x7f020043 -> 0x7f010002 (bool/def_wifi_on -> bool/def_wifi_on)` - value: `true` (ignored)
+- **Car Config RRO**: `0x7f020043 -> 0x7f010003 (bool/def_wifi_on -> bool/def_wifi_on)` - priority: 18 (HIGHEST)
+- **Product Overlay**: `0x7f020043 -> 0x7f010001 (bool/def_wifi_on -> bool/def_wifi_on)` - car common overlay
+- **Vendor Overlay**: `0x7f020043 -> 0x7f010002 (bool/def_wifi_on -> bool/def_wifi_on)` - goldfish overlay (LOWEST)
 
 #### 3. Check Current WiFi State
 ```bash
 adb shell settings get global wifi_on
 ```
 
-**Output:** `0` (WiFi is disabled by default - product overlay takes precedence)
+**Output:** `0` (WiFi is disabled by default - Car Config RRO takes highest precedence)
 
 #### 4. Verify Overlay File Locations
 ```bash
@@ -273,22 +277,27 @@ adb shell ls -la /product/overlay/ | grep Settings
 
 **Product Overlays (sdk_car_x86_64):**
 ```
+-rw-r--r--  1 root root   8542 2025-07-15 00:01 CarSettingsProviderConfigRRO.apk
 -rw-r--r--  1 root root   8542 2025-07-19 14:13 SettingsProvider__sdk_car_x86_64__auto_generated_rro_product.apk
 ```
 
 ### Priority Resolution Analysis (sdk_car_x86_64)
 
-Based on the partition hierarchy (system < vendor < odm < oem < product < system_ext), the effective priority for overlays in `sdk_car_x86_64` target is:
+Based on the partition hierarchy and priority values, the effective priority for overlays in `sdk_car_x86_64` target is:
 
-1. **SettingsProvider__sdk_car_x86_64__auto_generated_rro_product.apk** (product partition) - **HIGHEST**
-   - Source: `device/generic/car/common/overlay`
-   - Sets `def_wifi_on` to `false`
+1. **CarSettingsProviderConfigRRO.apk** (product partition, priority 18) - **HIGHEST**
+   - Source: `packages/services/Car/car_product/rro/overlay-config/`
+   - Official Car platform configuration
    
-2. **SettingsProvider__sdk_car_x86_64__auto_generated_rro_vendor.apk** (vendor partition) - **LOWEST**
+2. **SettingsProvider__sdk_car_x86_64__auto_generated_rro_product.apk** (product partition) - **MEDIUM**
+   - Source: `device/generic/car/common/overlay`
+   - Car device-specific customizations
+   
+3. **SettingsProvider__sdk_car_x86_64__auto_generated_rro_vendor.apk** (vendor partition) - **LOWEST**
    - Source: `device/generic/goldfish/overlay`  
-   - Sets `def_wifi_on` to `true` (but ignored due to lower priority)
+   - Emulator-specific defaults (ignored)
 
-**Result**: The product overlay from car common takes precedence and sets `def_wifi_on` to `false`, which explains why `adb shell settings get global wifi_on` returns `0`.
+**Result**: The Car Config RRO (CarSettingsProviderConfigRRO.apk) with priority 18 takes highest precedence and controls the final `def_wifi_on` value, which explains why `adb shell settings get global wifi_on` returns `0`.
 
 ### Basic Overlay Commands:
 ```bash
