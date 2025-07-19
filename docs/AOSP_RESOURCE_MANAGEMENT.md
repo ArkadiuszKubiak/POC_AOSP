@@ -21,8 +21,10 @@ This document provides comprehensive information about Android Resource Manageme
    - [Why Multiple Partitions?](#why-multiple-partitions-for-same-overlay)
    - [Overlay Inheritance Chain (sdk_car_x86_64)](#overlay-inheritance-chain-sdk_car_x86_64)
 5. [Debugging Overlay Issues](#debugging-overlay-issues)
-6. [Best Practices](#best-practices)
-7. [Common Issues and Solutions](#common-issues-and-solutions)
+6. [Forcing Overlay Rebuilds](#forcing-overlay-rebuilds)
+7. [Best Practices](#best-practices)
+8. [Common Issues and Solutions](#common-issues-and-solutions)
+8. [Forcing Overlay Rebuilds](#forcing-overlay-rebuilds)
 
 ---
 
@@ -146,23 +148,25 @@ private void loadBooleanSetting(SQLiteStatement stmt, String key, int resid) {
 
 In `sdk_car_x86_64` target configuration, `def_wifi_on` is actually defined in **THREE** active overlay sources:
 
-#### 1. Car Settings Provider Config RRO (Product Partition - HIGHEST PRIORITY)
-- **Path**: `packages/services/Car/car_product/rro/overlay-config/SettingsProviderRRO/res/values/defaults.xml`
-- **Generated APK**: `/product/overlay/CarSettingsProviderConfigRRO.apk`
-- **Overlay Name**: `com.android.providers.settings.car.config.rro`
-- **Priority**: `18`
-- **Purpose**: Official Car platform configuration defaults
-
-#### 2. Car Common Overlay (Product Partition - MEDIUM PRIORITY)
+#### 1. Car Common Overlay (Product Partition - HIGHEST PRIORITY)
 - **Path**: `device/generic/car/common/overlay/frameworks/base/packages/SettingsProvider/res/values/defaults.xml`
 - **Generated APK**: `/product/overlay/SettingsProvider__sdk_car_x86_64__auto_generated_rro_product.apk`
 - **Overlay Name**: `com.android.providers.settings.auto_generated_rro_product__`
+- **Priority**: `19` (HIGHEST - controls final value)
 - **Purpose**: Device-specific car customizations
+
+#### 2. Car Settings Provider Config RRO (Product Partition - MEDIUM PRIORITY)
+- **Path**: `packages/services/Car/car_product/rro/overlay-config/SettingsProviderRRO/res/values/defaults.xml`
+- **Generated APK**: `/product/overlay/CarSettingsProviderConfigRRO.apk`
+- **Overlay Name**: `com.android.providers.settings.car.config.rro`
+- **Priority**: `18` (overridden by car common overlay)
+- **Purpose**: Official Car platform configuration defaults
 
 #### 3. Goldfish Emulator Overlay (Vendor Partition - LOWEST PRIORITY)
 - **Path**: `device/generic/goldfish/overlay/frameworks/base/packages/SettingsProvider/res/values/defaults.xml`
 - **Generated APK**: `/vendor/overlay/SettingsProvider__sdk_car_x86_64__auto_generated_rro_vendor.apk`
 - **Overlay Name**: `com.android.providers.settings.auto_generated_rro_vendor__`
+- **Priority**: `6` (ignored - lowest priority)
 - **Purpose**: Emulator-specific defaults
 
 ### Why Multiple Partitions for Same Overlay?
@@ -218,21 +222,21 @@ This creates **THREE** distinct overlay sources for SettingsProvider:
 ```
 sdk_car_x86_64 Complete Overlay Hierarchy:
 ├── Product Partition (HIGH PRIORITY)
-│   ├── CarSettingsProviderConfigRRO.apk (Priority 18 - HIGHEST) ✓ APPLIED
-│   │   └── Source: packages/services/Car/car_product/build/car_product.mk
-│   │   └── def_wifi_on = false
+│   ├── SettingsProvider__sdk_car_x86_64__auto_generated_rro_product.apk (Priority 19 - HIGHEST) ✓ APPLIED
+│   │   └── Source: device/generic/car/common/overlay (from sdk_car_x86_64.mk)
+│   │   └── def_wifi_on = false (CONTROLS FINAL VALUE)
 │   │
-│   └── SettingsProvider__sdk_car_x86_64__auto_generated_rro_product.apk
-│       └── Source: device/generic/car/common/overlay (from sdk_car_x86_64.mk)
-│       └── def_wifi_on = false (IGNORED - lower priority than CarConfig)
+│   └── CarSettingsProviderConfigRRO.apk (Priority 18 - MEDIUM)
+│       └── Source: packages/services/Car/car_product/build/car_product.mk
+│       └── def_wifi_on = false (IGNORED - lower priority than car common)
 │
 └── Vendor Partition (LOWEST PRIORITY)
-    └── SettingsProvider__sdk_car_x86_64__auto_generated_rro_vendor.apk
+    └── SettingsProvider__sdk_car_x86_64__auto_generated_rro_vendor.apk (Priority 6)
         └── Source: device/generic/goldfish/overlay (from car_emulator_vendor.mk)
         └── def_wifi_on = true (IGNORED - lowest priority)
 ```
 
-**Key Discovery**: The documentation previously missed the **CarSettingsProviderConfigRRO** which is automatically included via the `car_product.mk` inheritance chain and has the highest priority (18), making it the controlling overlay for `def_wifi_on`.
+**Key Discovery**: Real emulator data shows that the **car common overlay** (priority 19) actually has higher priority than the **Car Config RRO** (priority 18), making the car common overlay the controlling overlay for `def_wifi_on`.
 
 **Result**: The same resource may be defined multiple times with different priorities, requiring careful management to ensure correct behavior.
 
@@ -301,21 +305,21 @@ adb shell ls -la /product/overlay/ | grep Settings
 
 ### Priority Resolution Analysis (sdk_car_x86_64)
 
-Based on the partition hierarchy and priority values, the effective priority for overlays in `sdk_car_x86_64` target is:
+Based on the partition hierarchy and actual priority values from the running emulator, the effective priority for overlays in `sdk_car_x86_64` target is:
 
-1. **CarSettingsProviderConfigRRO.apk** (product partition, priority 18) - **HIGHEST**
-   - Source: `packages/services/Car/car_product/rro/overlay-config/`
-   - Official Car platform configuration
-   
-2. **SettingsProvider__sdk_car_x86_64__auto_generated_rro_product.apk** (product partition) - **MEDIUM**
+1. **SettingsProvider__sdk_car_x86_64__auto_generated_rro_product.apk** (product partition, priority 19) - **HIGHEST**
    - Source: `device/generic/car/common/overlay`
-   - Car device-specific customizations
+   - Car device-specific customizations - **THIS OVERLAY CONTROLS def_wifi_on!**
    
-3. **SettingsProvider__sdk_car_x86_64__auto_generated_rro_vendor.apk** (vendor partition) - **LOWEST**
+2. **CarSettingsProviderConfigRRO.apk** (product partition, priority 18) - **MEDIUM**
+   - Source: `packages/services/Car/car_product/rro/overlay-config/`
+   - Official Car platform configuration (overridden by higher priority)
+   
+3. **SettingsProvider__sdk_car_x86_64__auto_generated_rro_vendor.apk** (vendor partition, priority 6) - **LOWEST**
    - Source: `device/generic/goldfish/overlay`  
    - Emulator-specific defaults (ignored)
 
-**Result**: The Car Config RRO (CarSettingsProviderConfigRRO.apk) with priority 18 takes highest precedence and controls the final `def_wifi_on` value, which explains why `adb shell settings get global wifi_on` returns `0`.
+**Result**: The Car Common overlay (auto_generated_rro_product) with priority 19 takes highest precedence and controls the final `def_wifi_on` value. The ADB command `adb shell settings get global wifi_on` returns the value from the highest priority overlay.
 
 ### Basic Overlay Commands:
 ```bash
@@ -436,24 +440,69 @@ adb shell ls -la /*/overlay/ | grep [overlay-name]
 
 ---
 
-## Summary
+## Forcing Overlay Rebuilds
 
-This document focuses specifically on Android Resource Management and Runtime Resource Overlays (RROs) as they apply to the `sdk_car_x86_64` target in AOSP. The documentation has been filtered to include only:
+When developing and testing overlay modifications, Android's build system may not always detect changes that require overlay regeneration. Use the provided clean script to force overlay rebuilds.
 
-### Overlays Used by sdk_car_x86_64:
-1. **Car Config RRO**: `packages/services/Car/car_product/rro/overlay-config/` (product partition, priority 18 - highest)
-2. **Car Common Overlay**: `device/generic/car/common/overlay` (product partition - medium priority)
-3. **Goldfish Emulator**: `device/generic/goldfish/overlay` (vendor partition - lowest priority)
+### Clean Overlay Build Script
 
-### Key Resources Covered:
-- **SettingsProvider overlays**: `def_wifi_on` resource management with three active overlays
-- **Partition hierarchy**: Car Config RRO (priority 18) > Product overlays > Vendor overlays
-- **Build configuration**: Car platform RRO, PRODUCT_PACKAGE_OVERLAYS and DEVICE_PACKAGE_OVERLAYS
-- **Resource resolution**: How Android selects final values from multiple overlay sources
+The `clean_overlay_build.sh` script removes overlay-related build artifacts to ensure clean rebuilds:
 
-### Excluded from This Documentation:
-- Overlays not used by `sdk_car_x86_64` (e.g., tablet, wear, other device-specific overlays)
-- Other target configurations (e.g., `sdk_car_arm64`, `aosp_car_emulator`)
-- Third-party OEM overlays not relevant to AOSP Car SDK
+```bash
+# Basic usage (cleans sdk_car_x86_64 by default)
+./scripts/clean_overlay_build.sh
 
-*This focused documentation provides targeted coverage of RRO systems for the `sdk_car_x86_64` target. For broader AOSP overlay documentation, refer to the general Android resource management guides.*
+# Clean specific target
+./scripts/clean_overlay_build.sh sdk_car_arm64
+
+# Show help
+./scripts/clean_overlay_build.sh --help
+```
+
+### What the Script Cleans
+
+#### 1. Overlay APK Files
+- `/system/overlay/`, `/vendor/overlay/`, `/product/overlay/`
+- All partition overlay directories in product output
+
+#### 2. Build Intermediates
+- Soong intermediate files for overlay compilation
+- Car SDK specific overlay intermediates
+- SettingsProvider overlay build artifacts
+
+#### 3. System Images
+- `system.img`, `vendor.img`, `product.img`
+- `super.img`, `system_ext.img` 
+- All image intermediates that contain overlays
+
+#### 4. Resource Cache
+- AAPT2 compiled resources
+- R.java files referencing overlay resources
+- Resource compilation cache files
+
+### Typical Workflow
+
+```bash
+# 1. Modify overlay XML file
+vim device/generic/car/common/overlay/frameworks/base/packages/SettingsProvider/res/values/defaults.xml
+
+# 2. Clean overlay build artifacts
+./scripts/clean_overlay_build.sh
+
+# 3. Rebuild
+. build/envsetup.sh
+lunch sdk_car_x86_64-trunk_staging-userdebug
+make -j$(nproc)
+
+# 4. Verify overlay changes
+adb shell cmd overlay list | grep settings
+adb shell settings get global wifi_on
+```
+
+### When to Use Clean Script
+
+- **Overlay XML modifications**: Any changes to overlay resource files
+- **Priority changes**: When overlay priority needs recalculation
+- **Partition changes**: Moving overlays between partitions
+- **Debugging**: When overlays aren't applying as expected
+- **Build consistency**: Ensuring clean state for CI/CD
