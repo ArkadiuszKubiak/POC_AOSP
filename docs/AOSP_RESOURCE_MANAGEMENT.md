@@ -110,14 +110,14 @@ private void loadBooleanSetting(SQLiteStatement stmt, String key, int resid) {
 ### Resource Resolution Flow:
 1. **DatabaseHelper** calls `loadBooleanSetting()` with `R.bool.def_wifi_on`
 2. **Resource Manager** resolves resource ID through overlay system
-3. **Overlay Manager** checks overlays in priority order (vendor → product → system)
+3. **Overlay Manager** checks overlays in priority order (system_ext → product → oem → odm → vendor → system)
 4. **Final Value** is returned to SettingsProvider for database initialization
 
 ### Multiple Overlay Sources for `def_wifi_on`
 
 In Car SDK configuration, `def_wifi_on` is defined in multiple overlay sources:
 
-#### 1. Car Product RRO (Highest Priority)
+#### 1. Car Product RRO (High Priority)
 - **Path**: `packages/services/Car/car_product/rro/overlay-config/SettingsProviderRRO/res/values/defaults.xml`
 - **Value**: `<bool name="def_wifi_on">false</bool>`
 - **Partition**: `/product/overlay/CarSettingsProviderConfigRRO.apk`
@@ -145,9 +145,10 @@ The Android build system automatically generates overlay APKs for different part
 - Provides consistent behavior regardless of partition availability
 
 #### 2. Vendor/Product Separation
-- Allows OEMs to override product-level settings at the vendor level
-- Maintains clear separation between vendor and product customizations
-- Enables granular control over resource priorities
+- Allows different levels of customization across the partition hierarchy
+- Maintains clear separation between vendor, product, and system customizations
+- Enables granular control over resource priorities according to the established hierarchy
+- Product partition overlays have higher priority than vendor partition overlays
 
 #### 3. Treble Compliance
 - Maintains separation between vendor and system components
