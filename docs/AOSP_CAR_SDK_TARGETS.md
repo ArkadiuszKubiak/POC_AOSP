@@ -274,17 +274,6 @@ make -j16 sdk_car_md_x86_64
 make -j16 sdk_car_portrait_x86_64
 ```
 
-#### Testing Changes
-```bash
-# Flash updated system
-adb reboot bootloader
-fastboot flashall
-
-# Or for quicker testing
-adb sync system
-adb reboot
-```
-
 #### Debugging Multi-Display Issues
 ```bash
 # Check display configuration
