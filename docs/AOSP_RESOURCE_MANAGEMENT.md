@@ -115,7 +115,7 @@ private void loadBooleanSetting(SQLiteStatement stmt, String key, int resid) {
 
 ### Multiple Overlay Sources for `def_wifi_on`
 
-In Car SDK configuration, `def_wifi_on` is defined in multiple overlay sources:
+In `sdk_car_x86_64` target configuration, `def_wifi_on` is defined in multiple overlay sources:
 
 #### 1. Car Product RRO (High Priority)
 - **Path**: `packages/services/Car/car_product/rro/overlay-config/SettingsProviderRRO/res/values/defaults.xml`
@@ -168,22 +168,18 @@ The Android build system automatically generates overlay APKs for different part
 
 ### Overlay Inheritance Chain
 
-The `sdk_car_md_x86_64` target inherits overlays from multiple sources:
+The `sdk_car_x86_64` target inherits overlays from multiple sources:
 
 ```makefile
-# sdk_car_md_x86_64.mk inherits from:
-$(call inherit-product, device/generic/car/common/car_md.mk)    # Multi-display overlays
+# sdk_car_x86_64.mk inherits from:
 $(call inherit-product, device/generic/car/sdk_car_x86_64.mk)   # Base car overlays
 ```
 
-This creates a complex overlay hierarchy:
+This creates an overlay hierarchy:
 
 ```
 Inheritance Chain:
-sdk_car_md_x86_64
-├── car_md.mk
-│   └── PRODUCT_PACKAGE_OVERLAYS += device/generic/car/common/overlay
-│       device/generic/car/emulator/multi-display/overlay
+sdk_car_x86_64
 └── sdk_car_x86_64.mk
     └── PRODUCT_PACKAGE_OVERLAYS := device/generic/car/common/overlay
 ```
