@@ -26,9 +26,8 @@ For more information about AOSP Car SDK development, multi-display systems, and 
 5. [Development Recommendations](#development-recommendations)
 6. [Build Commands](#build-commands)
 7. [Configuration Files](#configuration-files)
-8. [Overlay Configuration Differences](#overlay-configuration-differences)
-9. [Multi-Display Architecture](#multi-display-architecture)
-10. [Development Environment Setup](#development-environment-setup)
+8. [Multi-Display Architecture](#multi-display-architecture)
+9. [Development Environment Setup](#development-environment-setup)
 
 ---
 
@@ -48,7 +47,6 @@ For more information about AOSP Car SDK development, multi-display systems, and 
 - **Display**: Single landscape display
 - **Features**: Basic automotive functionality
 - **Memory footprint**: Smallest
-- **Overlay Configuration**: `device/generic/car/common/overlay`
 - **Use cases**:
   - Basic car application development
   - Testing core automotive features
@@ -66,12 +64,6 @@ For more information about AOSP Car SDK development, multi-display systems, and 
   EMULATOR_MULTIDISPLAY_HW_CONFIG := 1,968,792,160,0,2,1408,792,160,0,3,1408,792,160,0
   BUILD_EMULATOR_CLUSTER_DISPLAY := true
   ENABLE_CLUSTER_OS_DOUBLE := true
-  ```
-- **Overlay Configuration**:
-  ```makefile
-  PRODUCT_PACKAGE_OVERLAYS += \
-      device/generic/car/common/overlay \
-      device/generic/car/emulator/multi-display/overlay
   ```
 - **Additional features**:
   - Multi-zone audio support
@@ -107,7 +99,6 @@ For more information about AOSP Car SDK development, multi-display systems, and 
 | **Portrait optimization** | ❌ | ❌ | ✅ |
 | **Resource usage** | Low | High | Medium |
 | **Build time** | Fast | Slow | Medium |
-| **Overlay complexity** | Simple | Complex | Medium |
 
 ## Hardware Requirements
 
@@ -163,38 +154,6 @@ Each target inherits different configuration files:
 - **Standard**: `device/generic/car/sdk_car_x86_64.mk`
 - **Multi-Display**: `device/generic/car/common/car_md.mk` + `device/generic/car/sdk_car_x86_64.mk`
 - **Portrait**: `device/generic/car/sdk_car_portrait_x86_64.mk`
-
-## Overlay Configuration Differences
-
-The targets use different overlay configurations for customizing system behavior:
-
-| Target | Overlay Packages | Purpose |
-|--------|------------------|---------|
-| **Standard** | `device/generic/car/common/overlay` | Basic car-specific defaults |
-| **Multi-Display** | `device/generic/car/common/overlay` + `device/generic/car/emulator/multi-display/overlay` | Car defaults + multi-display configurations |
-| **Portrait** | Portrait-optimized overlays | Vertical display optimizations |
-
-### Standard Car SDK Overlays
-```makefile
-# In sdk_car_x86_64.mk
-PRODUCT_PACKAGE_OVERLAYS := device/generic/car/common/overlay
-```
-
-### Multi-Display Car SDK Overlays
-```makefile
-# In car_md.mk (inherited by sdk_car_md_x86_64)
-PRODUCT_PACKAGE_OVERLAYS += \
-    device/generic/car/common/overlay \
-    device/generic/car/emulator/multi-display/overlay
-```
-
-### Overlay Hierarchy
-```
-Multi-Display Target Overlay Resolution:
-1. Multi-display specific overlays (highest priority)
-2. Common car overlays (medium priority)
-3. Base system overlays (lowest priority)
-```
 
 ## Multi-Display Architecture
 
@@ -305,12 +264,6 @@ emulator -avd car_portrait_avd -no-snapshot-load -no-snapshot-save -skin 768x128
 3. **User Session Management**: Consider multi-user scenarios
 4. **Performance Optimization**: Multi-display targets require more resources
 
-#### For Overlay Development
-1. **Check Overlay Priority**: Understand which overlays take precedence
-2. **Test Resource Resolution**: Verify overlays are properly applied
-3. **Build Clean**: Clear overlay caches when making changes
-4. **Debug with ADB**: Use ADB commands to inspect overlay status
-
 ### Common Development Workflows
 
 #### Building Specific Targets
@@ -319,10 +272,6 @@ emulator -avd car_portrait_avd -no-snapshot-load -no-snapshot-save -skin 768x128
 make -j16 sdk_car_x86_64
 make -j16 sdk_car_md_x86_64
 make -j16 sdk_car_portrait_x86_64
-
-# Build with overlay updates
-rm -rf out/target/product/*/system/overlay/
-make -j16 systemimage
 ```
 
 #### Testing Changes
@@ -341,41 +290,10 @@ adb reboot
 # Check display configuration
 adb shell dumpsys display
 
-# Check overlay status
-adb shell cmd overlay list | grep car
-
 # Monitor system logs
 adb logcat -d | grep -i display
 ```
 
-## Debugging Overlay Issues
-
-When working with Car SDK overlays, use these target-specific debugging approaches:
-
-### Standard Target Debugging
-```bash
-# Check basic overlay status
-adb shell cmd overlay list | grep settings
-adb shell settings get global wifi_on
-```
-
-### Multi-Display Target Debugging
-```bash
-# Check multi-display overlays
-adb shell cmd overlay list | grep multi-display
-adb shell dumpsys activity displays
-
-# Check multi-display specific settings
-adb shell getprop | grep multidisplay
-```
-
-### Portrait Target Debugging
-```bash
-# Check orientation-specific overlays
-adb shell cmd overlay list | grep portrait
-adb shell dumpsys window displays
-```
-
 ---
 
-*Note: All targets are based on the trunk_staging branch and built in userdebug mode for development purposes. The overlay system ensures that automotive-specific defaults (like WiFi disabled by default) are properly applied across different target configurations.*
+*Note: All targets are based on the trunk_staging branch and built in userdebug mode for development purposes.*
