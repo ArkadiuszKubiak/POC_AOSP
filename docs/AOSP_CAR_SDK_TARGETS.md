@@ -26,8 +26,8 @@ For more information about AOSP Car SDK development, multi-display systems, and 
 5. [Development Recommendations](#development-recommendations)
 6. [Build Commands](#build-commands)
 7. [Configuration Files](#configuration-files)
-8. [Multi-Display Architecture](#multi-display-architecture)
-9. [Development Environment Setup](#development-environment-setup)
+8. [Emulator Launch Commands](#emulator-launch-commands)
+9. [Multi-Display Architecture](#multi-display-architecture)
 
 ---
 
@@ -134,6 +134,9 @@ For more information about AOSP Car SDK development, multi-display systems, and 
 ## Build Commands
 
 ```bash
+# Setup build environment first
+. build/envsetup.sh
+
 # Standard Car SDK
 lunch sdk_car_x86_64-trunk_staging-userdebug
 make -j16
@@ -154,6 +157,26 @@ Each target inherits different configuration files:
 - **Standard**: `device/generic/car/sdk_car_x86_64.mk`
 - **Multi-Display**: `device/generic/car/common/car_md.mk` + `device/generic/car/sdk_car_x86_64.mk`
 - **Portrait**: `device/generic/car/sdk_car_portrait_x86_64.mk`
+
+## Emulator Launch Commands
+
+### Standard Car SDK
+```bash
+emulator -avd car_avd -no-snapshot-load -no-snapshot-save
+```
+
+### Multi-Display Car SDK
+```bash
+# Launch with multi-display support
+emulator -avd car_md_avd -no-snapshot-load -no-snapshot-save \
+    -multidisplay-support true \
+    -car-multidisplay-config "1,968,792,160,0,2,1408,792,160,0,3,1408,792,160,0"
+```
+
+### Portrait Car SDK
+```bash
+emulator -avd car_portrait_avd -no-snapshot-load -no-snapshot-save -skin 768x1280
+```
 
 ## Multi-Display Architecture
 
@@ -197,90 +220,6 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     ro.vendor.simulateMultiZoneAudio=true \
     persist.sys.max_profiles=5 \
     com.android.car.internal.debug.num_auto_populated_users=1
-```
-
-## Development Environment Setup
-
-### Prerequisites for Each Target
-
-#### For Standard Car SDK (`sdk_car_x86_64`)
-```bash
-# Minimum requirements
-export JAVA_HOME=/usr/lib/jvm/java-11-openjdk
-export ANDROID_BUILD_TOP=/path/to/aosp
-
-# Build environment
-source build/envsetup.sh
-lunch sdk_car_x86_64-trunk_staging-userdebug
-```
-
-#### For Multi-Display Car SDK (`sdk_car_md_x86_64`)
-```bash
-# Enhanced requirements
-export ANDROID_BUILD_TOP=/path/to/aosp
-export DISPLAY=:0  # For multi-display emulator support
-
-# Build environment with multi-display support
-source build/envsetup.sh
-lunch sdk_car_md_x86_64-trunk_staging-userdebug
-
-# Optional: Set thread count based on your system
-export USE_CCACHE=1
-export CCACHE_SIZE=100G
-```
-
-#### For Portrait Car SDK (`sdk_car_portrait_x86_64`)
-```bash
-# Portrait-specific setup
-source build/envsetup.sh
-lunch sdk_car_portrait_x86_64-trunk_staging-userdebug
-```
-
-### Emulator Launch Commands
-
-#### Standard Car SDK
-```bash
-emulator -avd car_avd -no-snapshot-load -no-snapshot-save
-```
-
-#### Multi-Display Car SDK
-```bash
-# Launch with multi-display support
-emulator -avd car_md_avd -no-snapshot-load -no-snapshot-save \
-    -multidisplay-support true \
-    -car-multidisplay-config "1,968,792,160,0,2,1408,792,160,0,3,1408,792,160,0"
-```
-
-#### Portrait Car SDK
-```bash
-emulator -avd car_portrait_avd -no-snapshot-load -no-snapshot-save -skin 768x1280
-```
-
-### Development Tips
-
-#### For Multi-Display Development
-1. **Test on Multiple Displays**: Always verify apps work across all configured displays
-2. **Handle Display Changes**: Implement proper display change handling
-3. **User Session Management**: Consider multi-user scenarios
-4. **Performance Optimization**: Multi-display targets require more resources
-
-### Common Development Workflows
-
-#### Building Specific Targets
-```bash
-# Build only the target you need
-make -j16 sdk_car_x86_64
-make -j16 sdk_car_md_x86_64
-make -j16 sdk_car_portrait_x86_64
-```
-
-#### Debugging Multi-Display Issues
-```bash
-# Check display configuration
-adb shell dumpsys display
-
-# Monitor system logs
-adb logcat -d | grep -i display
 ```
 
 ---
