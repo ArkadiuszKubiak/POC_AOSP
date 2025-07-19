@@ -9,7 +9,6 @@ This document outlines the differences between the three main Car SDK targets av
 **Architecture Focus:** Android Automotive Development and Multi-Display Systems  
 **LinkedIn:** [www.linkedin.com/in/arkadiusz-kubiak-1b4994150](https://www.linkedin.com/in/arkadiusz-kubiak-1b4994150)
 
-For more information about AOSP Car SDK development, multi-display systems, and automotive Android development, feel free to contact the author.
 ---
 
 ## Table of Contents
@@ -24,7 +23,6 @@ For more information about AOSP Car SDK development, multi-display systems, and 
 6. [Build Commands](#build-commands)
 7. [Configuration Files](#configuration-files)
 8. [Emulator Launch Commands](#emulator-launch-commands)
-9. [Multi-Display Architecture](#multi-display-architecture)
 
 ---
 
@@ -136,15 +134,15 @@ For more information about AOSP Car SDK development, multi-display systems, and 
 
 # Standard Car SDK
 lunch sdk_car_x86_64-trunk_staging-userdebug
-make -j16
+make -j$(nproc)
 
 # Multi-Display Car SDK
 lunch sdk_car_md_x86_64-trunk_staging-userdebug
-make -j16
+make -j$(nproc)
 
 # Portrait Car SDK  
 lunch sdk_car_portrait_x86_64-trunk_staging-userdebug
-make -j16
+make -j$(nproc)
 ```
 
 ## Configuration Files
@@ -174,41 +172,6 @@ emulator -avd car_md_avd -no-snapshot-load -no-snapshot-save \
 ```bash
 emulator -avd car_portrait_avd -no-snapshot-load -no-snapshot-save -skin 768x1280
 ```
-
-## Multi-Display Architecture
-
-### Display Configuration for `sdk_car_md_x86_64`
-
-The multi-display target supports multiple screens with different purposes:
-
-#### Hardware Configuration
-```makefile
-# Display setup in car_md.mk
-EMULATOR_MULTIDISPLAY_HW_CONFIG := 1,968,792,160,0,2,1408,792,160,0,3,1408,792,160,0
-BUILD_EMULATOR_CLUSTER_DISPLAY := true
-ENABLE_CLUSTER_OS_DOUBLE := true
-```
-
-#### Display Layout
-```
-Display Architecture:
-┌─────────────────────────────────────────────────────────────┐
-│                    Display 1 (Primary)                     │
-│                   968x792 @ 160 DPI                        │
-│                 (Driver Interface)                         │
-├─────────────────────────────────────────────────────────────┤
-│  Display 2 (Cluster)    │    Display 3 (Passenger)        │
-│  1408x792 @ 160 DPI     │    1408x792 @ 160 DPI           │
-│  (Instrument Panel)     │    (Entertainment)              │
-└─────────────────────────┴──────────────────────────────────┘
-```
-
-#### Multi-Display Features
-- **Primary Display**: Main driver interface with navigation and controls
-- **Cluster Display**: Instrument panel with speed, fuel, warnings
-- **Passenger Display**: Entertainment system for passenger use
-- **Cross-Display Apps**: Applications that can span multiple displays
-- **Independent User Sessions**: Different users can use different displays
 
 ---
 
