@@ -74,77 +74,66 @@ set -e
 # All color codes use ANSI escape sequences for terminal compatibility.
 # ============================================================================
 
-# ANSI Color Codes - used throughout the script for consistent theming
-readonly RED='\033[0;31m'      # Errors and critical warnings
-readonly GREEN='\033[0;32m'    # Success messages and confirmations
-readonly YELLOW='\033[1;33m'   # Warnings and caution messages
-readonly BLUE='\033[0;34m'     # Informational messages
-readonly MAGENTA='\033[0;35m'  # Steps and progress indicators
-readonly CYAN='\033[0;36m'     # File names and technical details
-readonly WHITE='\033[1;37m'    # Headers and emphasis
-readonly BOLD='\033[1m'        # Important text highlighting
-readonly NC='\033[0m'          # No Color - reset to default terminal color
+# ANSI Color Codes - simplified and more readable color scheme
+readonly RED='\033[0;31m'      # Errors only
+readonly GREEN='\033[0;32m'    # Success messages only
+readonly YELLOW='\033[0;33m'   # Warnings only
+readonly BLUE='\033[0;34m'     # Headers only
+readonly WHITE='\033[0;37m'    # Normal info (no color for most text)
+readonly BOLD='\033[1m'        # Important text
+readonly NC='\033[0m'          # No Color - reset to default
 
 # ============================================================================
-# Colored Output Functions
+# Simplified Output Functions - Less Colorful, More Readable
 # ============================================================================
-# These functions provide consistent, colorful output throughout the script.
-# Each function takes a message as parameter and displays it with appropriate
-# color scheme and emoji for visual clarity and user experience enhancement.
+# Reduced emoji usage and simplified color scheme for better readability
+# Focus on clear hierarchy: errors=red, success=green, warnings=yellow, headers=blue
 # ============================================================================
 
 print_error() {
-    # Display error messages with red color and cross emoji
-    # Used for critical errors that may prevent script execution
-    echo -e "${RED}❌ ERROR: $1${NC}"
+    # Red for errors only - clear indication of problems
+    echo -e "${RED}✗ ERROR: $1${NC}"
 }
 
 print_success() {
-    # Display success messages with green color and checkmark emoji
-    # Used for successful operations and confirmations
-    echo -e "${GREEN}✅ SUCCESS: $1${NC}"
+    # Green for success only - clear confirmation of completion
+    echo -e "${GREEN}✓ $1${NC}"
 }
 
 print_warning() {
-    # Display warning messages with yellow color and warning emoji
-    # Used for non-critical warnings that require user attention
-    echo -e "${YELLOW}⚠️  WARNING: $1${NC}"
+    # Yellow for warnings only - important but not critical
+    echo -e "${YELLOW}⚠ WARNING: $1${NC}"
 }
 
 print_info() {
-    # Display informational messages with cyan color and tool emoji
-    # Used for general information and status updates
-    echo -e "${CYAN}🔧 INFO: $1${NC}"
+    # No color for regular info - easier on the eyes
+    echo "• $1"
 }
 
 print_step() {
-    # Display step/progress messages with magenta color and rocket emoji
-    # Used to indicate current script operation or progress
-    echo -e "${MAGENTA}🚀 STEP: $1${NC}"
+    # Minimal color for steps - just slight emphasis
+    echo -e "${BOLD}→ $1${NC}"
 }
 
 print_header() {
-    # Display section headers with blue bold color and target emoji
-    # Used for major section separators in the script output
-    echo -e "${BLUE}${BOLD}🎯 $1${NC}"
+    # Blue for headers only - clear section separation
+    echo
+    echo -e "${BLUE}${BOLD}=== $1 ===${NC}"
 }
 
 print_device() {
-    # Display device-related information with green color and phone emoji
-    # Used for device status, connection info, and hardware details
-    echo -e "${GREEN}📱 DEVICE: $1${NC}"
+    # No special color for device info - keep it simple
+    echo "📱 $1"
 }
 
 print_flash() {
-    # Display flashing progress with white color and lightning emoji
-    # Used specifically for partition flashing operations
-    echo -e "${WHITE}⚡ FLASHING: $1${NC}"
+    # Bold for flashing operations - important but not colored
+    echo -e "${BOLD}⚡ Flashing: $1${NC}"
 }
 
 print_partition() {
-    # Display partition information with cyan color and disk emoji
-    # Used for partition details, sizes, and diagnostic information
-    echo -e "${CYAN}💾 PARTITION: $1${NC}"
+    # No special color for partition info
+    echo "  💾 $1"
 }
 
 # ============================================================================
@@ -737,7 +726,7 @@ flash_if_exists() {
 # and provides a comprehensive report of what's available vs missing.
 # This helps users understand what can be flashed.
 scan_available_files() {
-    print_header "📁 SCANNING FOR IMAGE FILES"
+    print_header "SCANNING FOR IMAGE FILES"
     print_info "Checking project directory: $PROJECT_DIR"
     print_info "Looking for Android partition image files (.img)"
     echo
@@ -790,7 +779,7 @@ scan_available_files() {
 # Provides user-friendly preset options for different flashing scenarios.
 # Each preset is carefully designed for specific use cases and safety levels.
 show_preset_menu() {
-    print_header "🎯 FLASHING PRESET SELECTION"
+    print_header "FLASHING PRESET SELECTION"
     print_info "Choose a preset based on your flashing requirements:"
     echo
     
@@ -830,9 +819,9 @@ show_preset_menu() {
     print_info "   └─ No flashing performed - information only"
     echo
     
-    print_warning "⚠️  Important: Ensure bootloader is unlocked before flashing!"
+    print_warning "Important: Ensure bootloader is unlocked before flashing!"
     echo
-    read -p "🎯 Enter your choice (1-6): " preset_choice
+    read -p "Enter your choice (1-6): " preset_choice
 }
 
 # Function to process user's preset selection
@@ -1060,16 +1049,16 @@ select_custom_files() {
         local file_name="${available_files[$i]}"
         local description=$(get_partition_description "$file_name")
         
-        # Color-code based on importance
-        if [[ "$file_name" =~ (bootloader|boot|system|vendor|vbmeta|dtbo) ]]; then
-            # Critical files - show with emphasis
-            echo -e "${BOLD}${GREEN}$file_num. $file_name${NC} - ${CYAN}$description${NC}"
-        elif [[ "$file_name" =~ (userdata) ]]; then
-            # Data-destructive files - show with warning
-            echo -e "${BOLD}${YELLOW}$file_num. $file_name${NC} - ${RED}$description${NC}"
+        # Simplified color coding - only critical warnings
+        if [[ "$file_name" =~ (userdata) ]]; then
+            # Data-destructive files - red warning only
+            echo -e "${RED}$file_num. $file_name${NC} - $description [WILL ERASE DATA]"
+        elif [[ "$file_name" =~ (bootloader|boot|system|vendor|vbmeta|dtbo) ]]; then
+            # Critical files - simple bold
+            echo -e "${BOLD}$file_num. $file_name${NC} - $description [CRITICAL]"
         else
-            # Optional files - show normally
-            echo -e "${WHITE}$file_num. $file_name${NC} - ${CYAN}$description${NC}"
+            # Optional files - no color
+            echo "$file_num. $file_name - $description [OPTIONAL]"
         fi
     done
     
@@ -1159,15 +1148,15 @@ show_selected_files() {
         if [[ "$file" =~ (bootloader|boot|system|vendor|vbmeta|dtbo) ]]; then
             # Critical system files
             critical_files=$((critical_files + 1))
-            print_partition "🔧 $file - $description ${BOLD}[CRITICAL]${NC}"
+            print_partition "$file - $description [CRITICAL]"
         elif [[ "$file" =~ (userdata) ]]; then
             # Data-destructive files
             data_destructive=true
-            print_partition "⚠️  $file - $description ${RED}[WILL ERASE DATA]${NC}"
+            print_partition "⚠ $file - $description [WILL ERASE DATA]" 
         else
             # Optional/enhancement files
             optional_files=$((optional_files + 1))
-            print_partition "📦 $file - $description [OPTIONAL]"
+            print_partition "$file - $description [OPTIONAL]"
         fi
     done
     
@@ -1477,15 +1466,23 @@ finalize_flashing() {
 # This section orchestrates the entire flashing process through a logical
 # workflow that ensures safety, provides clear feedback, and handles errors.
 #
-# SCRIPT WORKFLOW:
-# 1. Initialize and display welcome information
-# 2. Prepare device (ADB detection -> fastboot modes -> unlock verification)
-# 3. Scan for available image files in project directory
-# 4. Present user-friendly preset menu with detailed descriptions
-# 5. Process user selection and validate file availability
-# 6. Show final confirmation with selected files and descriptions
-# 7. Execute flashing operations with automatic mode switching
-# 8. Finalize with device reboot and success confirmation
+# SCRIPT WORKFLOW (Version 2.1):
+# 1. Initialize and display welcome message
+# 2. Enter main menu loop with options:
+#    a. Flash Android Images - Complete interactive flashing process
+#    b. Partition Diagnostics - Device info and partition analysis  
+#    c. Show Documentation - Display key documentation sections
+#    d. Exit - Clean script termination
+# 3. For flashing option:
+#    • Prepare device (ADB detection -> fastboot modes -> unlock verification)
+#    • Scan for available image files in project directory
+#    • Present user-friendly preset menu with detailed descriptions
+#    • Process user selection and validate file availability
+#    • Show final confirmation with selected files and descriptions
+#    • Execute flashing operations with automatic mode switching
+#    • Finalize with device reboot and success confirmation
+#    • Return to main menu for additional operations
+# 4. Menu loop continues until user chooses to exit
 #
 # ERROR HANDLING:
 # - Exits gracefully on any critical error (bootloader locked, no files, etc.)
@@ -1503,9 +1500,9 @@ main() {
     # ========================================================================
     # Phase 1: Initialization and Welcome
     # ========================================================================
-    print_header "🚀 KHADAS VIM4 - INTERACTIVE FLASHING TOOL"
+    print_header "KHADAS VIM4 - INTERACTIVE FLASHING TOOL"
     print_info "Author: Arkadiusz Kubiak"
-    print_info "Version: 2.0 Enhanced with comprehensive comments"
+    print_info "Version: 2.1 - Improved readability"
     echo
     
     print_device "Target Device: Khadas VIM4"
@@ -1513,7 +1510,7 @@ main() {
     print_info "Script Purpose: Interactive Android partition flashing"
     echo
     
-    print_warning "⚠️  IMPORTANT PREREQUISITES:"
+    print_warning "IMPORTANT PREREQUISITES:"
     print_info "• Bootloader MUST be unlocked (see docs/VIM4_partitions.md)"
     print_info "• USB debugging enabled (for ADB) or manual fastboot mode"
     print_info "• Proper fastboot drivers installed"
@@ -1523,38 +1520,38 @@ main() {
     # ========================================================================
     # Phase 2: Device Preparation and Validation
     # ========================================================================
-    print_header "📱 DEVICE PREPARATION PHASE"
+    print_header "DEVICE PREPARATION PHASE"
     prepare_device
 
     # ========================================================================
     # Phase 3: File Discovery and Analysis
     # ========================================================================
-    print_header "📂 FILE DISCOVERY PHASE"
+    print_header "FILE DISCOVERY PHASE"
     scan_available_files
 
     # ========================================================================
     # Phase 4: User Selection and Validation
     # ========================================================================
-    print_header "🎯 SELECTION PHASE"
+    print_header "SELECTION PHASE"
     show_preset_menu
     select_files_by_preset
 
     # ========================================================================
     # Phase 5: Final Confirmation
     # ========================================================================
-    print_header "✅ CONFIRMATION PHASE"
+    print_header "CONFIRMATION PHASE"
     show_selected_files
 
     # ========================================================================
     # Phase 6: Flashing Execution
     # ========================================================================
-    print_header "⚡ FLASHING PHASE"
+    print_header "FLASHING PHASE"
     perform_flashing
 
     # ========================================================================
     # Phase 7: Completion and Reboot
     # ========================================================================
-    print_header "🏁 COMPLETION PHASE"
+    print_header "COMPLETION PHASE"
     finalize_flashing
 }
 

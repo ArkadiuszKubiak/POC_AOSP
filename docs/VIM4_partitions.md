@@ -110,6 +110,16 @@
 
 This repository contains comprehensive analysis and documentation for Android .img files used in flashing Khadas VIM4 devices. The project focuses on Project Treble architecture, dynamic partitions, and modern Android partition management.
 
+> **🚨 CRITICAL NOTICE - Android 10+ DTB Integration:**
+> 
+> Starting with **Android 10**, the Device Tree Blob (DTB) is integrated into `boot.img` and should **NOT** be flashed separately. 
+> 
+> **❌ WRONG:** `fastboot flash dtb dtb.img` ← May cause boot failure!  
+> **✅ CORRECT:** `fastboot flash boot boot.img` ← Contains kernel + ramdisk + DTB
+> 
+> Khadas VIM4 ships with Android 11+, so always use integrated DTB approach. 
+> See [Device Tree Integration History](#device-tree-blob-dtb-integration-history) for technical details.
+
 ## Author Information
 
 **Created by:** Arkadiusz Kubiak  
@@ -307,12 +317,69 @@ VINTF is the compatibility layer between Android Framework and Vendor HAL implem
 
 ### 2. Bootloader and Firmware Files
 
-| File | Size | Description |
-|------|------|-------------|
-| `bootloader.img` | 4M | U-Boot bootloader |
-| `dtb.img` | 262K | Device Tree Blob |
-| `dtbo.img` | 2M | Device Tree Overlay |
-| `logo.img` | 894K | Boot logo |
+| File | Size | Description | Android Version |
+|------|------|-------------|-----------------|
+| `bootloader.img` | 4M | U-Boot bootloader | All versions |
+| `dtb.img` | 262K | ~~Device Tree Blob~~ **DEPRECATED** | Pre-Android 10 only |
+| `dtbo.img` | 2M | Device Tree Overlay | All versions |
+| `logo.img` | 894K | Boot logo | All versions |
+
+> **🔄 CRITICAL Architecture Change - Android 10+ Boot Image Evolution:**
+> 
+> ### **Architecture Comparison:**
+> 
+> **Pre-Android 10 (Legacy):**
+> ```
+> ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+> │   boot.img      │    │   dtb.img       │    │   dtbo.img      │
+> │ • Kernel        │    │ • Device Tree   │    │ • DT Overlays   │
+> │ • Ramdisk       │    │ • Hardware Desc │    │ • Runtime Mods  │
+> └─────────────────┘    └─────────────────┘    └─────────────────┘
+> ```
+> 
+> **Android 10+ (Modern):**
+> ```
+> ┌─────────────────────────────────────────┐    ┌─────────────────┐
+> │             boot.img v3+                │    │   dtbo.img      │
+> │ • Kernel + Ramdisk + DTB (INTEGRATED)   │    │ • DT Overlays   │
+> └─────────────────────────────────────────┘    └─────────────────┘
+> ```
+> 
+> ### **Why This Change Was Made:**
+> 1. **Synchronization Issues:** Kernel and DTB could get out of sync during updates
+> 2. **Complexity:** Multiple partitions to manage during flashing
+> 3. **A/B Updates:** Required separate dtb_a and dtb_b partitions
+> 
+> ### **Benefits of Integration:**
+> - Single partition contains all boot components
+> - Kernel + DTB always in sync
+> - Simplified flashing process
+> - Reduced partition count
+> 
+> ### **Practical Flashing Commands:**
+> ```bash
+> # ✅ CORRECT (Android 10+):
+> fastboot flash boot boot.img        # Contains kernel + ramdisk + DTB
+> fastboot flash dtbo dtbo.img         # Overlays still separate
+> 
+> # ❌ WRONG (Android 10+):
+> # fastboot flash dtb dtb.img         # May cause boot failure!
+> ```
+> 
+> ### **VIM4 Specifics:**
+> - **Android Version:** 11+ (API 30+) → Uses integrated DTB
+> - **Build artifacts:** `boot.img` (✅ use this), `dtb.img` (❌ ignore), `dtbo.img` (✅ use this)
+> - **File sizes:** boot.img (~64MB), dtb.img (~4KB placeholder), dtbo.img (~2MB)
+> 
+> ### **Verification:**
+> ```bash
+> # Check boot image format
+> file boot.img  # Should show "Android bootimg"
+> 
+> # Extract boot components
+> unpack_bootimg --boot_img boot.img --out /tmp/boot/
+> ls /tmp/boot/  # Should show: kernel, ramdisk, dtb
+> ```
 
 ### 3. System Extension Files
 
@@ -352,10 +419,13 @@ VINTF is the compatibility layer between Android Framework and Vendor HAL implem
 
 ## Flashing Recommendations
 
+> **⚠️ IMPORTANT:** For Android 10+ devices (including Khadas VIM4), DTB is integrated into `boot.img`. 
+> Do NOT flash separate `dtb.img` as it may cause boot failures.
+
 ### Minimum Required (Basic System):
 1. `bootloader.img` - bootloader
-2. `dtb.img` - device tree
-3. `boot.img` - kernel + ramdisk
+2. ~~`dtb.img`~~ - **DEPRECATED** (integrated into boot.img on Android 10+)
+3. `boot.img` - kernel + ramdisk + DTB (Android 10+)
 4. `vbmeta.img` - verification metadata
 5. `system.img` - main system
 6. `vendor.img` - device files
@@ -761,8 +831,8 @@ arek# fastboot reboot fastboot      # Switch to userspace fastboot (fastbootd)
 ```bash
 # Traditional static partitions only
 fastboot flash bootloader bootloader.img    ✓ Supported
-fastboot flash dtb dtb.img                  ✓ Supported  
-fastboot flash boot boot.img                ✓ Supported
+fastboot flash dtb dtb.img                  ⚠️ Legacy only (pre-Android 10)
+fastboot flash boot boot.img                ✓ Supported (contains DTB on Android 10+)
 fastboot flash vbmeta vbmeta.img            ✓ Supported
 
 # Dynamic partitions - LIMITED or UNSUPPORTED
