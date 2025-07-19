@@ -10,9 +10,6 @@ This document outlines the differences between the three main Car SDK targets av
 **LinkedIn:** [www.linkedin.com/in/arkadiusz-kubiak-1b4994150](https://www.linkedin.com/in/arkadiusz-kubiak-1b4994150)
 
 For more information about AOSP Car SDK development, multi-display systems, and automotive Android development, feel free to contact the author.
-
-**Related Documentation**: For detailed information about Android Resource Management and Runtime Resource Overlays, see [`AOSP_RESOURCE_MANAGEMENT.md`](AOSP_RESOURCE_MANAGEMENT.md).
-
 ---
 
 ## Table of Contents
@@ -212,15 +209,6 @@ Display Architecture:
 - **Passenger Display**: Entertainment system for passenger use
 - **Cross-Display Apps**: Applications that can span multiple displays
 - **Independent User Sessions**: Different users can use different displays
-
-### Multi-Zone Audio Support
-```makefile
-# Audio configuration in car_md.mk
-PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
-    ro.vendor.simulateMultiZoneAudio=true \
-    persist.sys.max_profiles=5 \
-    com.android.car.internal.debug.num_auto_populated_users=1
-```
 
 ---
 
