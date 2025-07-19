@@ -9,8 +9,6 @@ This document provides comprehensive information about Android Resource Manageme
 **Architecture Focus:** Resource Overlay Systems and Android Resource Framework  
 **LinkedIn:** [www.linkedin.com/in/arkadiusz-kubiak-1b4994150](https://www.linkedin.com/in/arkadiusz-kubiak-1b4994150)
 
-For more information about Android Resource Management, RRO systems, and AOSP development, feel free to contact the author.
-
 ---
 
 ## Table of Contents
@@ -56,25 +54,31 @@ Runtime Resource Overlays are APK files that can override resources in target ap
 
 ## RRO Priority System
 
-Android uses a hierarchical priority system for overlays across different partitions:
+Android uses a hierarchical priority system for overlays across different partitions. When multiple overlays override the same resources, the order of the overlays is important. An overlay has greater precedence than overlays with configurations preceding its own configuration.
 
-### Priority Hierarchy:
-1. **Vendor Overlays** (`/vendor/overlay/`) - **HIGHEST PRIORITY**
-2. **Product Overlays** (`/product/overlay/`) - **MEDIUM PRIORITY**  
-3. **System Overlays** (`/system/overlay/`) - **LOWEST PRIORITY**
+### Priority Hierarchy (from least to greatest precedence):
+1. **System** (`/system/overlay/`) - **LOWEST PRIORITY**
+2. **Vendor** (`/vendor/overlay/`)
+3. **ODM** (`/odm/overlay/`)
+4. **OEM** (`/oem/overlay/`)
+5. **Product** (`/product/overlay/`)
+6. **System Extension** (`/system_ext/overlay/`) - **HIGHEST PRIORITY**
 
 ### How Priority Works:
 - When multiple overlays define the same resource, the overlay with the highest priority takes precedence
-- If vendor overlay doesn't define a resource, system checks product overlay
-- If product overlay doesn't define it, system falls back to system overlay
-- If no overlay defines it, system uses original resource value
+- If system_ext overlay doesn't define a resource, system checks product overlay
+- The system continues down the hierarchy until it finds a defined resource or uses the original value
+- If no overlay defines the resource, system uses original resource value
 
 ### Example Priority Resolution:
 ```
 Resource: def_wifi_on
-├── Vendor Overlay: <not defined>
-├── Product Overlay: false  ← USED (highest priority with value)
-└── System Overlay: true    ← IGNORED (lower priority)
+├── System Extension: <not defined>
+├── Product Overlay: false      ← USED (highest priority with value)
+├── OEM Overlay: <not defined>
+├── ODM Overlay: <not defined>
+├── Vendor Overlay: true        ← IGNORED (lower priority)
+└── System Overlay: true        ← IGNORED (lower priority)
 
 Result: def_wifi_on = false
 ```
