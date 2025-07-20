@@ -3,16 +3,13 @@ cc_library_shared {
     name: "libhelloworld_jni",
     // Specifies the source file(s) for the JNI library
     srcs: ["hello_world_jni.cpp"],
-    // Sets the SDK version to match the app that uses this JNI library
-    sdk_version: "current",
     // Lists shared libraries that this JNI library depends on
-    // Note: When using sdk_version, only NDK libraries are available
     shared_libs: [
         "libbinder_ndk",           // Android Binder NDK library
-        "liblog",                  // Android logging library (available in NDK)
+        "liblog",                  // Android logging library
+        "libutils",                // Android utility library (now available)
         "vendor.brcm.helloworld-V1-ndk", // Vendor-specific HelloWorld NDK library
     ],
-    // Note: libutils is not available in SDK builds, removed to fix variant error
     // Specifies header-only libraries required for compilation
     header_libs: ["jni_headers"], // JNI headers for native interface
     // Compiler flags for building the library
@@ -24,8 +21,8 @@ android_app {
     name: "HelloWorld",
     // Specifies Kotlin source files using glob pattern
     srcs: ["src/**/*.kt"],
-    // Sets the SDK version to use for compilation
-    sdk_version: "current",
+    // Use platform APIs instead of SDK to match vendor dependency requirements
+    platform_apis: true,
     // Marks the app as privileged (can access additional system permissions)
     privileged: true,
     // Kotlin compiler flags for JVM default methods
@@ -38,6 +35,7 @@ android_app {
         "androidx.compose.ui_ui-tooling-preview",     // Compose UI tooling preview
         "androidx.lifecycle_lifecycle-runtime-ktx",   // Lifecycle runtime for Kotlin
         "androidx.compose.runtime_runtime",           // Compose runtime library
+        "vendor.brcm.helloworld-V1-java",             // Vendor-specific HelloWorld java library
     ],
     // Specifies JNI libraries to be packaged with the app
     jni_libs: ["libhelloworld_jni"], // JNI library built above

@@ -6,18 +6,28 @@
  * 
  * Features:
  * - TextField for user input.
- * - Button to send the input message to a native service asynchronously.
- * - Displays the result of the operation (success or error).
+ * - Button to send the input message to a native service asynchronously via JNI.
+ * - Button to send the input message to a vendor service via Binder/ServiceManager.
+ * - Displays the result of both operations (success or error).
  * - Uses LaunchedEffect and coroutines to handle asynchronous native calls without blocking the UI.
  *
  * State Management:
  * - `text`: Holds the current input from the user.
- * - `result`: Displays the outcome of the native service call.
- * - `isSending`: Indicates whether a message is currently being sent, disabling the button and showing a loading state.
+ * - `result`: Displays the outcome of the JNI native service call.
+ * - `binderResult`: Displays the outcome of the Binder service call.
+ * - `isJniCalling`: Indicates whether a JNI call is currently in progress.
+ * - `isBinderCalling`: Indicates whether a Binder call is currently in progress.
  *
- * Native Integration:
- * - Calls `HelloWorldNative.sayHelloNative(text)` on a background thread using `Dispatchers.IO`.
- * - Updates the UI based on the result of the native call.
+ * Communication Methods:
+ * 1. JNI Integration: Calls `HelloWorldNative.sayHelloNative(text)` on a background thread.
+ * 2. Direct AIDL Interface: Uses ServiceManager.getService() and IHelloWorld.Stub.asInterface() for direct method calls.
+ *
+ * The Direct AIDL implementation:
+ * - Gets service from ServiceManager using "vendor.brcm.helloworld.IHelloWorld/default"
+ * - Converts raw IBinder to typed interface using IHelloWorld.Stub.asInterface()
+ * - Calls service.sayHello(text) directly - no manual marshalling needed!
+ * - Much cleaner and type-safe compared to manual transact() calls
+ * - Handles errors and displays detailed results
  */
 package com.example.helloworld
 
@@ -31,6 +41,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import android.os.ServiceManager
+import android.os.IBinder
+import android.os.Parcel
+import vendor.brcm.helloworld.IHelloWorld
 
 
 // MainActivity is the entry point of the application.
@@ -52,8 +66,12 @@ fun HelloWorldScreen() {
     var text by remember { mutableStateOf("") }
     // Holds the result of the native service call (success or error message).
     var result by remember { mutableStateOf<String?>(null) }
-    // Indicates whether a message is currently being sent.
-    var isSending by remember { mutableStateOf(false) }
+    // Indicates whether a JNI call is currently in progress.
+    var isJniCalling by remember { mutableStateOf(false) }
+    // Indicates whether Binder call is in progress
+    var isBinderCalling by remember { mutableStateOf(false) }
+    // Holds the result of Binder operations
+    var binderResult by remember { mutableStateOf<String?>(null) }
 
     /**
      * UI layout using Jetpack Compose that allows the user to input a message, send it to a native service,
@@ -100,28 +118,57 @@ fun HelloWorldScreen() {
             // Button to send the input message to the native service.
             Button(
                 onClick = { 
-                    // Set isSending to true to trigger the LaunchedEffect and disable the button.
-                    isSending = true 
+                    // Set isJniCalling to true to trigger the LaunchedEffect and disable the button.
+                    isJniCalling = true 
                 },
-                enabled = !isSending // Disable button while sending to prevent multiple clicks.
+                enabled = !isJniCalling // Disable button while calling to prevent multiple clicks.
             ) {
-                // Change button text based on sending state for user feedback.
-                Text(if (isSending) "Sending..." else "Send to service")
+                // Change button text based on calling state for user feedback.
+                Text(if (isJniCalling) "Calling..." else "Send via JNI")
             }
+            
+            // Spacer to add vertical space between elements.
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            // Button to send message via direct AIDL interface call
+            Button(
+                onClick = { 
+                    // Set isBinderCalling to true to trigger direct AIDL communication
+                    isBinderCalling = true 
+                },
+                enabled = !isBinderCalling, // Disable button while calling to prevent multiple calls
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+            ) {
+                // Change button text based on calling state for user feedback.
+                Text(if (isBinderCalling) "Calling..." else "Send via AIDL")
+            }
+            
             // Spacer to add vertical space between elements.
             Spacer(modifier = Modifier.height(16.dp))
 
             // Display the result message if available.
             result?.let {
                 // Show the result of the native call (success or error).
-                Text(it)
+                Text(
+                    text = "JNI Result: $it",
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            
+            // Display the Binder result if available.
+            binderResult?.let {
+                // Show the result of the direct AIDL call (success or error).
+                Text(
+                    text = "AIDL Result: $it",
+                    color = MaterialTheme.colorScheme.secondary
+                )
             }
         }
     }
 
-    // Use LaunchedEffect to call native code asynchronously when isSending changes.
-    LaunchedEffect(isSending) {
-        if (isSending) {
+    // Use LaunchedEffect to call native code asynchronously when isJniCalling changes.
+    LaunchedEffect(isJniCalling) {
+        if (isJniCalling) {
             // Call the native function on a background thread.
             val success = withContext(Dispatchers.IO) {
                 HelloWorldNative.sayHelloNative(text)
@@ -132,8 +179,44 @@ fun HelloWorldScreen() {
             } else {
                 "Error calling the service!\nTried to send: $text"
             }
-            // Reset sending state to allow further interactions.
-            isSending = false
+            // Reset calling state to allow further interactions.
+            isJniCalling = false
+        }
+    }
+    
+    // Use LaunchedEffect to call service via Binder when isBinderCalling changes.
+    LaunchedEffect(isBinderCalling) {
+        if (isBinderCalling) {
+            // Call the service via Binder on a background thread.
+            binderResult = withContext(Dispatchers.IO) {
+                try {
+                    // Try to get the vendor service from ServiceManager
+                    val serviceName = "vendor.brcm.helloworld.IHelloWorld/default"
+                    val binder: IBinder? = ServiceManager.getService(serviceName)
+                    
+                    if (binder == null) {
+                        "Service NOT found in ServiceManager!\nSearched for: $serviceName"
+                    } else {
+                        // Service found, now call sayHello method directly using AIDL stub
+                        try {
+                            // Convert raw IBinder to typed interface using generated stub
+                            val service: IHelloWorld = IHelloWorld.Stub.asInterface(binder)
+                            
+                            // Note: sayHello returns Unit (void), not String
+                            service.sayHello(text)
+                            
+                            "Direct AIDL call successful!\nService: $serviceName\nSent: '$text'\nMethod: IHelloWorld.sayHello() [Direct]\nNote: Method returns void"
+                            
+                        } catch (e: Exception) {
+                            "Error during direct AIDL call!\nService: $serviceName\nError: ${e.message}\nMessage: '$text'"
+                        }
+                    }
+                } catch (e: Exception) {
+                    "Error accessing ServiceManager!\nError: ${e.message}"
+                }
+            }
+            // Reset calling state to allow further interactions.
+            isBinderCalling = false
         }
     }
 }
