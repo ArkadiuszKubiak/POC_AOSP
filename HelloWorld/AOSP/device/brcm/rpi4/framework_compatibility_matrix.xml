@@ -1,0 +1,11 @@
+<compatibility-matrix version="1.0" type="framework">
+    <!-- Add your vendor AIDL HAL -->
+    <hal format="aidl" optional="true">
+        <name>vendor.brcm.helloworld</name>
+        <version>1</version>
+        <interface>
+            <name>IHelloWorld</name>
+            <instance>default</instance>
+        </interface>
+    </hal>
+</compatibility-matrix>

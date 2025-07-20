@@ -3,15 +3,16 @@ cc_library_shared {
     name: "libhelloworld_jni",
     // Specifies the source file(s) for the JNI library
     srcs: ["hello_world_jni.cpp"],
-    // Indicates that this library is for vendor partition
-    vendor: true,
+    // Sets the SDK version to match the app that uses this JNI library
+    sdk_version: "current",
     // Lists shared libraries that this JNI library depends on
+    // Note: When using sdk_version, only NDK libraries are available
     shared_libs: [
         "libbinder_ndk",           // Android Binder NDK library
-        "liblog",                  // Android logging library
-        "libutils",                // Android utility library
+        "liblog",                  // Android logging library (available in NDK)
         "vendor.brcm.helloworld-V1-ndk", // Vendor-specific HelloWorld NDK library
     ],
+    // Note: libutils is not available in SDK builds, removed to fix variant error
     // Specifies header-only libraries required for compilation
     header_libs: ["jni_headers"], // JNI headers for native interface
     // Compiler flags for building the library
@@ -25,8 +26,6 @@ android_app {
     srcs: ["src/**/*.kt"],
     // Sets the SDK version to use for compilation
     sdk_version: "current",
-    // Indicates that this app is for vendor partition
-    vendor: true,
     // Marks the app as privileged (can access additional system permissions)
     privileged: true,
     // Kotlin compiler flags for JVM default methods

@@ -2,12 +2,13 @@
 // It specifies how AIDL files should be compiled and which language bindings (e.g., C++, Java) should be generated for inter-process communication (IPC) in Android.
 aidl_interface {
     name: "vendor.brcm.helloworld",
-    // This interface will be installed in the vendor partition.
-    vendor: true,
+    // This interface will be available in both system and vendor partitions for cross-partition communication.
+    vendor_available: true,
     // This is recommended during development, prototyping, or testing.
     srcs: [
         "vendor/brcm/helloworld/IHelloWorld.aidl",
     ],
+    // Specifies the stability level of the AIDL interface; "vintf" indicates compatibility with the VINTF (Vendor Interface) framework for stable system/vendor interfaces.
     stability: "vintf",
     // The 'backend' section specifies which language bindings will be generated for this interface.
     backend: {
