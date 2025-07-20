@@ -1,8 +1,15 @@
 # POC_AOSP: Complete HelloWorld Example for AOSP 14 on Raspberry Pi 4
 
+## Author Information
+
+**Created by:** Arkadiusz Kubiak  
+**Purpose:** Complete AOSP 14 demonstration with dual Binder IPC implementations for Raspberry Pi 4  
+**Architecture Focus:** AIDL HAL Services, Dual Communication Patterns, Security Policies, and Modern Android Development  
+**LinkedIn:** [www.linkedin.com/in/arkadiusz-kubiak-1b4994150](https://www.linkedin.com/in/arkadiusz-kubiak-1b4994150)
+
 ## Overview
 
-This project demonstrates a complete Andr### 6. ### 6. JNI Native Layerecurity Frameworkid Open Source Project (AOSP) 14 implementation on Raspberry Pi 4, showcasing the full stack integration from kernel driver to Android application. The project follows AOSP architectural best practices and demonstrates modern Android development patterns including AIDL HAL services, SELinux policies, VINTF framework integration, and cross-partition communication.
+This project demonstrates a complete Android Open Source Project (AOSP) 14 implementation on Raspberry Pi 4, showcasing the full stack integration from kernel driver to Android application. The project follows AOSP architectural best practices and demonstrates modern Android development patterns including AIDL HAL services, SELinux policies, VINTF framework integration, and cross-partition communication.
 
 **Key Features:**
 - **Kernel Driver**: Custom sysfs interface for hardware abstraction
@@ -290,113 +297,6 @@ The project includes extensive documentation covering:
 - **Development Tools**: Scripts for development workflow and debugging
 - **Performance Comparison**: Analysis of JNI vs Direct Binder approach trade-offs
 
-## Author Information
-
-**Created by:** Arkadiusz Kubiak  
-**Purpose:** Complete AOSP 14 demonstration with dual Binder IPC implementations for Raspberry Pi 4  
-**Architecture Focus:** AIDL HAL Services, Dual Communication Patterns, Security Policies, and Modern Android Development  
-**LinkedIn:** [www.linkedin.com/in/arkadiusz-kubiak-1b4994150](https://www.linkedin.com/in/arkadiusz-kubiak-1b4994150)
-
 For detailed implementation guides and advanced topics, refer to the comprehensive documentation in the `docs/` directory.
 
 ---
-
-## Privileged Application Architecture
-
-### Privileged Application Status
-
-The HelloWorld application is configured as a **privileged application** in the AOSP build system, granting it elevated permissions and access to vendor partition services.
-
-#### Privileged App Configuration (Android.bp)
-```blueprint
-android_app {
-    name: "HelloWorld",
-    privileged: true,          // Marks as privileged application
-    platform_apis: true,      // Use platform APIs instead of SDK
-    // ... other configuration
-}
-```
-
-#### Key Privileged Application Benefits:
-- **Extended Permissions**: Access to system-level permissions not available to regular apps
-- **Vendor Partition Access**: Direct communication with vendor HAL services across partitions
-- **Platform API Access**: Full platform API usage instead of limited SDK APIs
-- **Service Manager Access**: Direct ServiceManager interaction for service discovery
-- **Binder Communication**: Unrestricted Binder/AIDL communication with system and vendor services
-
-### Vendor Partition Access
-
-The privileged status enables the application to communicate across Android's partition boundaries:
-
-#### Partition Architecture:
-```
-┌─────────────────┐    ┌─────────────────┐
-│   System        │    │   Vendor        │
-│   Partition     │    │   Partition     │
-│                 │    │                 │
-│ HelloWorld App  │◄──►│ HelloWorld HAL  │
-│ (Privileged)    │    │ Service         │
-│                 │    │                 │
-│ ServiceManager  │    │ vndbinder       │
-└─────────────────┘    └─────────────────┘
-```
-
-#### Cross-Partition Communication Mechanisms:
-
-1. **vndbinder**: Vendor-specific Binder driver for vendor partition communication
-2. **ServiceManager**: System service discovery for vendor services
-3. **AIDL Interface**: Vendor-defined interface accessible from system partition
-4. **VINTF Framework**: Vendor Interface (VINTF) compliance for service declarations
-
-### Permission Model and Security
-
-#### Android Manifest Permissions:
-The application uses minimal permissions while leveraging privileged status:
-
-```xml
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.example.helloworld">
-    
-    <!-- No explicit permissions required due to privileged status -->
-    
-    <application android:label="HelloWorld">
-        <activity android:name=".MainActivity" android:exported="true">
-            <!-- ... activity configuration -->
-        </activity>
-    </application>
-</manifest>
-```
-
-#### Privileged App Security Benefits:
-- **Implicit Permissions**: Many system permissions granted automatically
-- **Service Access**: Direct access to vendor services without permission declarations
-- **Binder Security**: Secure IPC through Android's Binder security model
-- **SELinux Integration**: Works within SELinux mandatory access control policies
-
-#### Security Considerations:
-- **Trusted Context**: Privileged apps run in a trusted security context
-- **Vendor Trust**: Communication with vendor services assumes vendor code trust
-- **SELinux Enforcement**: All communication still subject to SELinux policy enforcement
-- **Partition Isolation**: Maintains security through partition-based isolation
-
-### Implementation Details
-
-#### Service Discovery Process:
-1. **ServiceManager Query**: Application queries ServiceManager for vendor service
-2. **Cross-Partition Lookup**: ServiceManager locates service in vendor partition
-3. **vndbinder Communication**: Establishes vndbinder connection to vendor service
-4. **AIDL Interface**: Uses generated AIDL stub for type-safe communication
-
-#### Build System Integration:
-- **Privileged Directory**: App installed to `/system/priv-app/` instead of `/system/app/`
-- **Extended Permissions**: Automatic grant of privileged permissions
-- **Vendor Dependencies**: Can link against vendor libraries and interfaces
-- **Platform Access**: Full Android platform API access without SDK restrictions
-
-#### Runtime Characteristics:
-- **Process Privileges**: Runs with elevated system privileges
-- **Memory Access**: Extended memory and resource access
-- **Service Priority**: Higher priority in system service scheduling
-- **Debugging Access**: Enhanced debugging and profiling capabilities
-
-This privileged application architecture enables seamless communication between the Android framework (system partition) and vendor-specific HAL services (vendor partition) while maintaining security through Android's established permission and SELinux frameworks.
