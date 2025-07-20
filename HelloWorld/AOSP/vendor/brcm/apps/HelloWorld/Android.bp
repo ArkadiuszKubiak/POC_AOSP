@@ -22,8 +22,14 @@ android_app {
     // Specifies Kotlin source files using glob pattern
     srcs: ["src/**/*.kt"],
     // Use platform APIs instead of SDK to match vendor dependency requirements
+    // This allows access to @hide APIs and internal framework classes
     platform_apis: true,
-    // Marks the app as privileged (can access additional system permissions)
+    // Marks the app as privileged (grants elevated system permissions)
+    // Privileged apps are installed to /system/priv-app/ and have:
+    // - Access to vendor partition services via vndbinder
+    // - Direct ServiceManager communication capabilities
+    // - Extended permission grants without explicit manifest declarations
+    // - Ability to communicate across Android partition boundaries
     privileged: true,
     // Kotlin compiler flags for JVM default methods
     kotlincflags: ["-Xjvm-default=all"],

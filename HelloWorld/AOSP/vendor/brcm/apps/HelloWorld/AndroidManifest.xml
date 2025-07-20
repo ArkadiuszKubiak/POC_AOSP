@@ -1,10 +1,20 @@
 <!--
-    AndroidManifest.xml for HelloWorld app.
+    AndroidManifest.xml for HelloWorld privileged application.
     This file defines essential information about the Android application, such as its package name, permissions, components (activities, services, etc.), and how it interacts with the system and other apps.
 
+    PRIVILEGED APPLICATION CONTEXT:
+    This app is configured as privileged in Android.bp (privileged: true), which grants:
+    - Elevated system permissions without explicit manifest declarations
+    - Cross-partition communication access (system ↔ vendor)
+    - Direct ServiceManager interaction capabilities
+    - vndbinder communication for vendor HAL service access
+    - Installation to /system/priv-app/ with extended privileges
+
+    MANIFEST CONFIGURATION:
     - Declares the package: com.example.helloworld
         (A package uniquely identifies the app and is used for organizing its code and resources)
-    - Requests INSTALL_PACKAGES permission (system-level, not for normal apps)
+    - No explicit permissions required due to privileged status
+        (System automatically grants necessary permissions for vendor service communication)
     - Application attributes:
         - Label: "HelloWorld"
         - hasCode: true (contains code)
@@ -14,6 +24,12 @@
         - Intent filter:
             - Action: MAIN (entry point)
             - Category: LAUNCHER (appears in launcher)
+
+    SECURITY MODEL:
+    - Privileged app runs in trusted system context
+    - Cross-partition communication secured by SELinux policies
+    - Vendor service access controlled by VINTF framework
+    - Binder communication protected by Android's IPC security model
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.example.helloworld">
