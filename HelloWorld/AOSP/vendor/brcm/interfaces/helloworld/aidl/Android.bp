@@ -15,6 +15,9 @@ aidl_interface {
         cpp: {
             enabled: true, // Enable C++ backend for native services/clients.
         },
+        java: {
+            enabled: true, // Enable Java backend for Android apps.
+        },
     },
     // 'versions_with_info' specifies a list of version objects for the interface,
     // each containing a 'version' string and an 'imports' array for dependencies.

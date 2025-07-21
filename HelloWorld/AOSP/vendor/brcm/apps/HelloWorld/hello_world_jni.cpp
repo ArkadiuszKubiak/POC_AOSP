@@ -21,6 +21,11 @@ extern "C"
  * @param jmsg  Java string containing the message to send.
  * @return JNI_TRUE if the message was sent successfully, JNI_FALSE otherwise.
  */
+// JNI Function Naming Convention:
+// Java_com_example_helloworld_HelloWorldNative_sayHelloNative
+// │    │                      │                │
+// │    └─ package name        └─ class name    └─ method name
+// └─ JNI prefix
 JNIEXPORT jboolean JNICALL
 Java_com_example_helloworld_HelloWorldNative_sayHelloNative(JNIEnv* env, jobject /* thiz */, jstring jmsg) {
     std::cout << "[JNI] sayHelloNative called" << std::endl;
